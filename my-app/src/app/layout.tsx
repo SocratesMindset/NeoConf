@@ -1,4 +1,11 @@
-import { QueryProvider } from "./providers/QueryProvider";
+import "./globals.css";
+import { AppShell } from "@/components/layout/AppShell";
+import { StoreProvider } from "./providers/StoreProvider";
+
+export const metadata = {
+  title: "NeoConf",
+  description: "Базовый шаблон проекта на Next.js с MobX",
+};
 
 export default function RootLayout({
   children,
@@ -7,8 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru">
-      <body>
-        <QueryProvider>{children}</QueryProvider>
+      <body className="antialiased">
+        <StoreProvider>
+          <AppShell>{children}</AppShell>
+        </StoreProvider>
       </body>
     </html>
   );
