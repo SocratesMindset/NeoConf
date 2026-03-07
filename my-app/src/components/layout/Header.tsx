@@ -12,7 +12,7 @@ const navigationItems = [
 
 export function Header() {
   return (
-    <header className="border-b border-[#D8C8A8] bg-[#F5F5DC]/90 backdrop-blur">
+    <header className="border-b border-[#D8C8A8] bg-[#734222] backdrop-blur">
       <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="text-lg font-semibold tracking-tight">
           <Link href="/">NeoConf</Link>
