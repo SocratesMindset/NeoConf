@@ -4,9 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "start:prod": "./scripts/start-prod.sh",
+    "lint": "eslint",
+    "prisma:generate": "prisma generate",
+    "prisma:db:push": "prisma db push",
+    "prisma:seed": "node --env-file=.env prisma/seed.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.16.3",

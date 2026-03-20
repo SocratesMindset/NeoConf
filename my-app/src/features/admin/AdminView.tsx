@@ -1,6 +1,7 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import Link from "next/link";
+import { type FormEvent, useEffect, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useStore } from "@/app/providers/StoreProvider";
 
@@ -16,8 +17,7 @@ function formatDate(dateIso: string) {
 }
 
 const AdminView = observer(() => {
-  const { conferenceStore } = useStore();
-  const initialConferenceId = conferenceStore.conferences[0]?.id ?? "";
+  const { authStore, conferenceStore } = useStore();
 
   const [createConferenceForm, setCreateConferenceForm] = useState({
     name: "",
@@ -25,7 +25,7 @@ const AdminView = observer(() => {
     startDate: "",
   });
   const [sectionRepForm, setSectionRepForm] = useState({
-    conferenceId: initialConferenceId,
+    conferenceId: "",
     sectionName: "",
     representativeName: "",
     representativeEmail: "",
@@ -33,24 +33,39 @@ const AdminView = observer(() => {
   const [conferenceNotice, setConferenceNotice] = useState<Notice>(null);
   const [representativeNotice, setRepresentativeNotice] = useState<Notice>(null);
 
-  function handleCreateConference(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    if (!sectionRepForm.conferenceId && conferenceStore.conferences[0]?.id) {
+      setSectionRepForm((prev) => ({
+        ...prev,
+        conferenceId: conferenceStore.conferences[0]?.id ?? "",
+      }));
+    }
+  }, [conferenceStore.conferences, sectionRepForm.conferenceId]);
+
+  async function handleCreateConference(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      conferenceStore.createConference(createConferenceForm);
+      await conferenceStore.createConference(createConferenceForm);
       setConferenceNotice({ type: "success", text: "Конференция создана." });
       setCreateConferenceForm({ name: "", city: "", startDate: "" });
     } catch (error) {
       setConferenceNotice({
         type: "error",
-        text: error instanceof Error ? error.message : "Не удалось создать конференцию.",
+        text:
+          typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof error.message === "string"
+            ? error.message
+            : "Не удалось создать конференцию.",
       });
     }
   }
 
-  function handleAssignRepresentative(event: FormEvent<HTMLFormElement>) {
+  async function handleAssignRepresentative(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      conferenceStore.assignSectionRepresentative(sectionRepForm);
+      await conferenceStore.assignSectionRepresentative(sectionRepForm);
       setRepresentativeNotice({
         type: "success",
         text: "Представитель секции назначен.",
@@ -64,9 +79,44 @@ const AdminView = observer(() => {
     } catch (error) {
       setRepresentativeNotice({
         type: "error",
-        text: error instanceof Error ? error.message : "Не удалось назначить представителя.",
+        text:
+          typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof error.message === "string"
+            ? error.message
+            : "Не удалось назначить представителя.",
       });
     }
+  }
+
+  if (!authStore.user) {
+    return (
+      <section className="space-y-4">
+        <h1 className="text-3xl font-semibold tracking-tight">Админ-панель</h1>
+        <p className="text-[#6A4A2D]">
+          Для доступа войдите под аккаунтом администратора.
+        </p>
+        <Link
+          href="/auth/login"
+          className="inline-flex rounded-full bg-[#734222] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#8A4F29]"
+        >
+          Войти
+        </Link>
+      </section>
+    );
+  }
+
+  if (authStore.user.role !== "admin") {
+    return (
+      <section className="space-y-4">
+        <h1 className="text-3xl font-semibold tracking-tight">Админ-панель</h1>
+        <p className="text-[#6A4A2D]">
+          Доступ есть только у роли администратора. Сейчас вы вошли под
+          аккаунтом {authStore.user.fullName}.
+        </p>
+      </section>
+    );
   }
 
   return (
@@ -81,7 +131,7 @@ const AdminView = observer(() => {
       <div className="grid gap-6 lg:grid-cols-2">
         <form
           className="space-y-4 rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm"
-          onSubmit={handleCreateConference}
+          onSubmit={(event) => void handleCreateConference(event)}
         >
           <h2 className="text-lg font-semibold">Создать конференцию</h2>
           <label className="block space-y-1">
@@ -90,7 +140,10 @@ const AdminView = observer(() => {
               className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
               value={createConferenceForm.name}
               onChange={(event) =>
-                setCreateConferenceForm((prev) => ({ ...prev, name: event.target.value }))
+                setCreateConferenceForm((prev) => ({
+                  ...prev,
+                  name: event.target.value,
+                }))
               }
               placeholder="NeoConf Summer 2026"
             />
@@ -102,7 +155,10 @@ const AdminView = observer(() => {
               className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
               value={createConferenceForm.city}
               onChange={(event) =>
-                setCreateConferenceForm((prev) => ({ ...prev, city: event.target.value }))
+                setCreateConferenceForm((prev) => ({
+                  ...prev,
+                  city: event.target.value,
+                }))
               }
               placeholder="Санкт-Петербург"
             />
@@ -115,7 +171,10 @@ const AdminView = observer(() => {
               type="date"
               value={createConferenceForm.startDate}
               onChange={(event) =>
-                setCreateConferenceForm((prev) => ({ ...prev, startDate: event.target.value }))
+                setCreateConferenceForm((prev) => ({
+                  ...prev,
+                  startDate: event.target.value,
+                }))
               }
             />
           </label>
@@ -142,7 +201,7 @@ const AdminView = observer(() => {
 
         <form
           className="space-y-4 rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm"
-          onSubmit={handleAssignRepresentative}
+          onSubmit={(event) => void handleAssignRepresentative(event)}
         >
           <h2 className="text-lg font-semibold">Назначить представителя секции</h2>
           <label className="block space-y-1">
@@ -151,7 +210,10 @@ const AdminView = observer(() => {
               className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
               value={sectionRepForm.conferenceId}
               onChange={(event) =>
-                setSectionRepForm((prev) => ({ ...prev, conferenceId: event.target.value }))
+                setSectionRepForm((prev) => ({
+                  ...prev,
+                  conferenceId: event.target.value,
+                }))
               }
             >
               <option value="">Выберите конференцию</option>
@@ -169,7 +231,10 @@ const AdminView = observer(() => {
               className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
               value={sectionRepForm.sectionName}
               onChange={(event) =>
-                setSectionRepForm((prev) => ({ ...prev, sectionName: event.target.value }))
+                setSectionRepForm((prev) => ({
+                  ...prev,
+                  sectionName: event.target.value,
+                }))
               }
               placeholder="Data Science"
             />
@@ -251,12 +316,15 @@ const AdminView = observer(() => {
           {conferenceStore.sectionRepresentatives.length ? (
             <ul className="mt-3 space-y-2 text-sm">
               {conferenceStore.sectionRepresentatives.map((representative) => {
-                const conference = conferenceStore.getConferenceById(representative.conferenceId);
+                const conference = conferenceStore.getConferenceById(
+                  representative.conferenceId,
+                );
                 return (
                   <li key={representative.id} className="rounded-xl bg-[#F5F5DC] px-3 py-2">
                     <p className="font-medium">{representative.sectionName}</p>
                     <p className="text-[#816040]">
-                      {representative.representativeName} · {representative.representativeEmail}
+                      {representative.representativeName} ·{" "}
+                      {representative.representativeEmail}
                     </p>
                     <p className="text-xs text-[#9C7A56]">
                       {conference?.name ?? "Конференция не найдена"}

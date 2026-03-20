@@ -1,0 +1,33 @@
+databases:
+  - name: neoconf-db
+    plan: basic-256mb
+    databaseName: neoconf
+    user: neoconf
+
+services:
+  - type: web
+    name: neoconf
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: npm ci && npm run prisma:generate && npm run build
+    startCommand: ./scripts/start-prod.sh
+    healthCheckPath: /
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: DATABASE_URL
+        fromDatabase:
+          name: neoconf-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: UPLOAD_DIR
+        value: storage/uploads/articles
+      - key: SESSION_TTL_DAYS
+        value: "7"
+    disk:
+      name: storage
+      mountPath: /opt/render/project/src/storage
+      sizeGB: 1

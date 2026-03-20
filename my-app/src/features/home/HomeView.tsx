@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { observer } from "mobx-react-lite";
 import { useStore } from "@/app/providers/StoreProvider";
+import { roleHomePaths, roleLabels } from "@/lib/client-auth";
 import ConferenceBank from "./components/ConferenceBank";
 
 const roleCards = [
@@ -33,7 +34,7 @@ const roleCards = [
 ];
 
 const HomeView = observer(() => {
-  const { appStore, conferenceStore } = useStore();
+  const { appStore, authStore, conferenceStore } = useStore();
 
   return (
     <section className="space-y-8">
@@ -52,24 +53,43 @@ const HomeView = observer(() => {
 
       <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
         <h2 className="text-lg font-semibold">Доступ в систему</h2>
-        <p className="mt-2 text-sm text-[#6A4A2D]">
-          Подготовили базовые экраны авторизации и регистрации. Пока без
-          подключения API и базы данных.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <Link
-            href="/auth/login"
-            className="inline-flex rounded-full bg-[#734222] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#8A4F29]"
-          >
-            Вход
-          </Link>
-          <Link
-            href="/auth/register"
-            className="inline-flex rounded-full border border-[#C7B288] bg-[#F5F5DC] px-4 py-2 text-sm font-medium text-[#5D4128] transition hover:bg-[#EFE3C8]"
-          >
-            Регистрация
-          </Link>
-        </div>
+        {authStore.user ? (
+          <>
+            <p className="mt-2 text-sm text-[#6A4A2D]">
+              Вы вошли как {authStore.user.fullName}. Роль:{" "}
+              {roleLabels[authStore.user.role]}.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href={roleHomePaths[authStore.user.role]}
+                className="inline-flex rounded-full bg-[#734222] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#8A4F29]"
+              >
+                Открыть мой кабинет
+              </Link>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="mt-2 text-sm text-[#6A4A2D]">
+              Регистрация и вход подключены к серверу, данные сохраняются в
+              Postgres.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href="/auth/login"
+                className="inline-flex rounded-full bg-[#734222] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#8A4F29]"
+              >
+                Вход
+              </Link>
+              <Link
+                href="/auth/register"
+                className="inline-flex rounded-full border border-[#C7B288] bg-[#F5F5DC] px-4 py-2 text-sm font-medium text-[#5D4128] transition hover:bg-[#EFE3C8]"
+              >
+                Регистрация
+              </Link>
+            </div>
+          </>
+        )}
       </div>
 
       <ConferenceBank />

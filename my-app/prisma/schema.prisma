@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PARTICIPANT
+  REVIEWER
+  SECTION_CHAIR
+  ADMIN
+}
+
+model User {
+  id            String                   @id @default(cuid())
+  fullName      String
+  email         String                   @unique
+  role          UserRole
+  passwordHash  String
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+  sessions      Session[]
+  registrations ConferenceRegistration[]
+  articles      Article[]
+  reviews       Review[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Conference {
+  id                    String                   @id @default(cuid())
+  name                  String
+  city                  String
+  startDate             DateTime
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  registrations         ConferenceRegistration[]
+  articles              Article[]
+  sectionRepresentatives SectionRepresentative[]
+}
+
+model ConferenceRegistration {
+  id           String     @id @default(cuid())
+  createdAt    DateTime   @default(now())
+  conferenceId String
+  userId       String
+  conference   Conference @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conferenceId, userId])
+  @@index([conferenceId])
+  @@index([userId])
+}
+
+model Article {
+  id              String               @id @default(cuid())
+  sectionName     String
+  title           String
+  abstract        String
+  originalFileName String
+  storageKey      String               @unique
+  mimeType        String
+  fileSizeBytes   Int
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  conferenceId    String
+  authorId        String
+  conference      Conference           @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  author          User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  assignments     ReviewerAssignment[]
+  reviews         Review[]
+
+  @@index([conferenceId])
+  @@index([authorId])
+}
+
+model ReviewerAssignment {
+  id            String   @id @default(cuid())
+  reviewerName  String
+  reviewerEmail String
+  assignedBy    String
+  createdAt     DateTime @default(now())
+  articleId     String
+  article       Article   @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, reviewerEmail])
+  @@index([articleId])
+  @@index([reviewerEmail])
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  score      Int
+  comment    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  articleId  String
+  reviewerId String
+  article    Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  reviewer   User     @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, reviewerId])
+  @@index([articleId])
+  @@index([reviewerId])
+}
+
+model SectionRepresentative {
+  id                  String     @id @default(cuid())
+  sectionName         String
+  representativeName  String
+  representativeEmail String
+  createdAt           DateTime   @default(now())
+  conferenceId        String
+  conference          Conference @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+
+  @@unique([conferenceId, sectionName])
+  @@index([conferenceId])
+  @@index([representativeEmail])
+}

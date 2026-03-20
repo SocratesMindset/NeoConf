@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { type FormEvent, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useStore } from "@/app/providers/StoreProvider";
@@ -17,60 +18,121 @@ function formatDate(dateIso: string) {
 }
 
 const SectionChairView = observer(() => {
-  const { conferenceStore } = useStore();
+  const { authStore, conferenceStore } = useStore();
   const [notice, setNotice] = useState<Notice>(null);
   const [form, setForm] = useState({
-    assignedBy: "",
     articleId: "",
     reviewerName: "",
     reviewerEmail: "",
   });
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const managedSectionKeys = new Set(
+    conferenceStore.sectionRepresentatives
+      .filter(
+        (representative) =>
+          representative.representativeEmail.toLowerCase() ===
+          authStore.user?.email.toLowerCase(),
+      )
+      .map(
+        (representative) =>
+          `${representative.conferenceId}::${representative.sectionName}`,
+      ),
+  );
+
+  const visibleArticles = conferenceStore.articles.filter((article) =>
+    managedSectionKeys.has(`${article.conferenceId}::${article.sectionName}`),
+  );
+
+  const visibleAssignments = conferenceStore.reviewerAssignments.filter(
+    (assignment) => {
+      const article = conferenceStore.getArticleById(assignment.articleId);
+      if (!article) {
+        return false;
+      }
+
+      return managedSectionKeys.has(
+        `${article.conferenceId}::${article.sectionName}`,
+      );
+    },
+  );
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      conferenceStore.assignReviewer(form);
+      await conferenceStore.assignReviewer(form);
       setNotice({ type: "success", text: "Рецензент назначен на статью." });
-      setForm((prev) => ({
-        ...prev,
+      setForm({
         articleId: "",
         reviewerName: "",
         reviewerEmail: "",
-      }));
+      });
     } catch (error) {
       setNotice({
         type: "error",
-        text: error instanceof Error ? error.message : "Не удалось назначить рецензента.",
+        text:
+          typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof error.message === "string"
+            ? error.message
+            : "Не удалось назначить рецензента.",
       });
     }
+  }
+
+  if (!authStore.user) {
+    return (
+      <section className="space-y-4">
+        <h1 className="text-3xl font-semibold tracking-tight">
+          Страница председателя секции
+        </h1>
+        <p className="text-[#6A4A2D]">
+          Для назначения рецензентов войдите под аккаунтом председателя секции.
+        </p>
+        <Link
+          href="/auth/login"
+          className="inline-flex rounded-full bg-[#734222] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#8A4F29]"
+        >
+          Войти
+        </Link>
+      </section>
+    );
+  }
+
+  if (authStore.user.role !== "section-chair") {
+    return (
+      <section className="space-y-4">
+        <h1 className="text-3xl font-semibold tracking-tight">
+          Страница председателя секции
+        </h1>
+        <p className="text-[#6A4A2D]">
+          Эта страница доступна только для роли председателя секции.
+        </p>
+      </section>
+    );
   }
 
   return (
     <section className="space-y-8">
       <header className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Страница председателя секции</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">
+          Страница председателя секции
+        </h1>
         <p className="text-[#6A4A2D]">
-          Председатель назначает рецензентов на поданные статьи.
+          Председатель назначает рецензентов только на статьи своей секции.
         </p>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
         <form
           className="space-y-4 rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm"
-          onSubmit={handleSubmit}
+          onSubmit={(event) => void handleSubmit(event)}
         >
           <h2 className="text-lg font-semibold">Назначить рецензента</h2>
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Имя председателя секции</span>
-            <input
-              className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-              value={form.assignedBy}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, assignedBy: event.target.value }))
-              }
-              placeholder="Алексей Смирнов"
-            />
-          </label>
+
+          <div className="rounded-xl bg-[#F5F5DC] px-3 py-2 text-sm text-[#5D4128]">
+            {authStore.user.fullName} · {authStore.user.email}
+          </div>
 
           <label className="block space-y-1">
             <span className="text-sm text-[#6A4A2D]">Статья</span>
@@ -82,7 +144,7 @@ const SectionChairView = observer(() => {
               }
             >
               <option value="">Выберите статью</option>
-              {conferenceStore.articles.map((article) => (
+              {visibleArticles.map((article) => (
                 <option key={article.id} value={article.id}>
                   {article.title}
                 </option>
@@ -96,7 +158,10 @@ const SectionChairView = observer(() => {
               className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
               value={form.reviewerName}
               onChange={(event) =>
-                setForm((prev) => ({ ...prev, reviewerName: event.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  reviewerName: event.target.value,
+                }))
               }
               placeholder="Мария Петрова"
             />
@@ -109,14 +174,23 @@ const SectionChairView = observer(() => {
               type="email"
               value={form.reviewerEmail}
               onChange={(event) =>
-                setForm((prev) => ({ ...prev, reviewerEmail: event.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  reviewerEmail: event.target.value,
+                }))
               }
               placeholder="reviewer@example.com"
             />
           </label>
 
           {notice ? (
-            <p className={notice.type === "success" ? "text-sm text-emerald-700" : "text-sm text-red-700"}>
+            <p
+              className={
+                notice.type === "success"
+                  ? "text-sm text-emerald-700"
+                  : "text-sm text-red-700"
+              }
+            >
               {notice.text}
             </p>
           ) : null}
@@ -131,47 +205,68 @@ const SectionChairView = observer(() => {
 
         <div className="space-y-6">
           <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
-            <h3 className="text-base font-semibold">Поданные статьи</h3>
-            {conferenceStore.articles.length ? (
+            <h3 className="text-base font-semibold">
+              Поданные статьи моей секции
+            </h3>
+            {visibleArticles.length ? (
               <ul className="mt-3 space-y-2 text-sm">
-                {conferenceStore.articles.slice(0, 8).map((article) => {
-                  const conference = conferenceStore.getConferenceById(article.conferenceId);
+                {visibleArticles.slice(0, 8).map((article) => {
+                  const conference = conferenceStore.getConferenceById(
+                    article.conferenceId,
+                  );
                   return (
-                    <li key={article.id} className="rounded-xl bg-[#F5F5DC] px-3 py-2">
+                    <li
+                      key={article.id}
+                      className="rounded-xl bg-[#F5F5DC] px-3 py-2"
+                    >
                       <p className="font-medium">{article.title}</p>
                       <p className="text-[#816040]">
-                        {article.authorName} · {conference?.name ?? "Конференция"}
+                        {article.authorName} ·{" "}
+                        {conference?.name ?? "Конференция"}
                       </p>
                     </li>
                   );
                 })}
               </ul>
             ) : (
-              <p className="mt-3 text-sm text-[#816040]">Статей пока нет.</p>
+              <p className="mt-3 text-sm text-[#816040]">
+                На ваши секции пока не назначено статей или администратор ещё не
+                закрепил за вами секцию.
+              </p>
             )}
           </div>
 
           <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
             <h3 className="text-base font-semibold">Текущие назначения</h3>
-            {conferenceStore.reviewerAssignments.length ? (
+            {visibleAssignments.length ? (
               <ul className="mt-3 space-y-2 text-sm">
-                {conferenceStore.reviewerAssignments.slice(0, 8).map((assignment) => {
-                  const article = conferenceStore.getArticleById(assignment.articleId);
+                {visibleAssignments.slice(0, 8).map((assignment) => {
+                  const article = conferenceStore.getArticleById(
+                    assignment.articleId,
+                  );
                   return (
-                    <li key={assignment.id} className="rounded-xl bg-[#F5F5DC] px-3 py-2">
-                      <p className="font-medium">{article?.title ?? "Статья не найдена"}</p>
+                    <li
+                      key={assignment.id}
+                      className="rounded-xl bg-[#F5F5DC] px-3 py-2"
+                    >
+                      <p className="font-medium">
+                        {article?.title ?? "Статья не найдена"}
+                      </p>
                       <p className="text-[#816040]">
                         {assignment.reviewerName} · {assignment.reviewerEmail}
                       </p>
                       <p className="text-xs text-[#9C7A56]">
-                        Назначил: {assignment.assignedBy} · {formatDate(assignment.createdAt)}
+                        Назначил: {assignment.assignedBy} ·{" "}
+                        {formatDate(assignment.createdAt)}
                       </p>
                     </li>
                   );
                 })}
               </ul>
             ) : (
-              <p className="mt-3 text-sm text-[#816040]">Назначений пока нет.</p>
+              <p className="mt-3 text-sm text-[#816040]">
+                Назначений пока нет.
+              </p>
             )}
           </div>
         </div>

@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+:root {
+    --font-body: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+    --font-display:
+        "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+}
+
 body {
     font-family: var(--font-body), sans-serif;
 }

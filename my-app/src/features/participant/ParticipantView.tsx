@@ -1,6 +1,7 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import Link from "next/link";
+import { type FormEvent, useEffect, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useStore } from "@/app/providers/StoreProvider";
 
@@ -17,89 +18,139 @@ function formatDate(dateIso: string) {
 }
 
 const ParticipantView = observer(() => {
-  const { conferenceStore } = useStore();
+  const { authStore, conferenceStore } = useStore();
   const conferences = conferenceStore.conferences;
-  const initialConferenceId = conferences[0]?.id ?? "";
-  const initialArticleSections = initialConferenceId
-    ? conferenceStore.getSectionsForConference(initialConferenceId)
-    : [];
 
   const [registrationForm, setRegistrationForm] = useState({
-    participantName: "",
-    participantEmail: "",
-    conferenceId: initialConferenceId,
+    conferenceId: "",
   });
   const [articleForm, setArticleForm] = useState({
-    authorName: "",
     title: "",
     abstract: "",
-    conferenceId: initialConferenceId,
-    sectionName: initialArticleSections[0] ?? "",
-    fileName: "",
+    conferenceId: "",
+    sectionName: "",
+    file: null as File | null,
   });
   const [fileInputKey, setFileInputKey] = useState(0);
   const [registrationNotice, setRegistrationNotice] = useState<Notice>(null);
   const [articleNotice, setArticleNotice] = useState<Notice>(null);
 
+  useEffect(() => {
+    const defaultConferenceId = conferences[0]?.id ?? "";
+
+    if (!registrationForm.conferenceId && defaultConferenceId) {
+      setRegistrationForm({ conferenceId: defaultConferenceId });
+    }
+
+    if (!articleForm.conferenceId && defaultConferenceId) {
+      const sections = conferenceStore.getSectionsForConference(defaultConferenceId);
+      setArticleForm((prev) => ({
+        ...prev,
+        conferenceId: defaultConferenceId,
+        sectionName: sections[0] ?? "",
+      }));
+    }
+  }, [articleForm.conferenceId, conferenceStore, conferences, registrationForm.conferenceId]);
+
   const recentArticles = conferenceStore.articles.slice(0, 5);
-  const recentRegistrations = conferenceStore.participantRegistrations.slice(
-    0,
-    5,
-  );
+  const recentRegistrations = conferenceStore.participantRegistrations.slice(0, 5);
   const articleSections = articleForm.conferenceId
     ? conferenceStore.getSectionsForConference(articleForm.conferenceId)
     : [];
 
-  function handleRegistrationSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleRegistrationSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      conferenceStore.registerParticipant(registrationForm);
+      await conferenceStore.registerParticipant(registrationForm.conferenceId);
       setRegistrationNotice({
         type: "success",
         text: "Вы успешно зарегистрированы на конференцию.",
       });
-      setRegistrationForm((prev) => ({
-        ...prev,
-        participantName: "",
-        participantEmail: "",
-      }));
     } catch (error) {
       setRegistrationNotice({
         type: "error",
         text:
-          error instanceof Error
+          typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof error.message === "string"
             ? error.message
             : "Не удалось зарегистрироваться.",
       });
     }
   }
 
-  function handleArticleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleArticleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      conferenceStore.submitArticle(articleForm);
+      if (!articleForm.file) {
+        throw new Error("Выберите файл статьи.");
+      }
+
+      await conferenceStore.submitArticle({
+        conferenceId: articleForm.conferenceId,
+        sectionName: articleForm.sectionName,
+        title: articleForm.title,
+        abstract: articleForm.abstract,
+        file: articleForm.file,
+      });
+
+      const sections = articleForm.conferenceId
+        ? conferenceStore.getSectionsForConference(articleForm.conferenceId)
+        : [];
+
       setArticleNotice({
         type: "success",
         text: "Статья загружена в систему.",
       });
       setArticleForm((prev) => ({
         ...prev,
-        authorName: "",
         title: "",
         abstract: "",
-        sectionName: articleSections[0] ?? "",
-        fileName: "",
+        sectionName: sections[0] ?? "",
+        file: null,
       }));
       setFileInputKey((prev) => prev + 1);
     } catch (error) {
       setArticleNotice({
         type: "error",
         text:
-          error instanceof Error
+          typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof error.message === "string"
             ? error.message
             : "Не удалось загрузить статью.",
       });
     }
+  }
+
+  if (!authStore.user) {
+    return (
+      <section className="space-y-4">
+        <h1 className="text-3xl font-semibold tracking-tight">Страница участника</h1>
+        <p className="text-[#6A4A2D]">
+          Для регистрации на конференцию и отправки статьи нужно войти в систему.
+        </p>
+        <Link
+          href="/auth/login"
+          className="inline-flex rounded-full bg-[#734222] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#8A4F29]"
+        >
+          Войти
+        </Link>
+      </section>
+    );
+  }
+
+  if (authStore.user.role !== "participant") {
+    return (
+      <section className="space-y-4">
+        <h1 className="text-3xl font-semibold tracking-tight">Страница участника</h1>
+        <p className="text-[#6A4A2D]">
+          Эта страница доступна только для роли участника.
+        </p>
+      </section>
+    );
   }
 
   return (
@@ -116,39 +167,13 @@ const ParticipantView = observer(() => {
       <div className="grid gap-6 lg:grid-cols-2">
         <form
           className="space-y-4 rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm"
-          onSubmit={handleRegistrationSubmit}
+          onSubmit={(event) => void handleRegistrationSubmit(event)}
         >
           <h2 className="text-lg font-semibold">Регистрация на конференцию</h2>
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Имя</span>
-            <input
-              className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-              value={registrationForm.participantName}
-              onChange={(event) =>
-                setRegistrationForm((prev) => ({
-                  ...prev,
-                  participantName: event.target.value,
-                }))
-              }
-              placeholder="Иван Иванов"
-            />
-          </label>
 
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Email</span>
-            <input
-              className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-              type="email"
-              value={registrationForm.participantEmail}
-              onChange={(event) =>
-                setRegistrationForm((prev) => ({
-                  ...prev,
-                  participantEmail: event.target.value,
-                }))
-              }
-              placeholder="ivan@example.com"
-            />
-          </label>
+          <div className="rounded-xl bg-[#F5F5DC] px-3 py-2 text-sm text-[#5D4128]">
+            {authStore.user.fullName} · {authStore.user.email}
+          </div>
 
           <label className="block space-y-1">
             <span className="text-sm text-[#6A4A2D]">Конференция</span>
@@ -156,10 +181,9 @@ const ParticipantView = observer(() => {
               className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
               value={registrationForm.conferenceId}
               onChange={(event) =>
-                setRegistrationForm((prev) => ({
-                  ...prev,
+                setRegistrationForm({
                   conferenceId: event.target.value,
-                }))
+                })
               }
             >
               <option value="">Выберите конференцию</option>
@@ -193,23 +217,13 @@ const ParticipantView = observer(() => {
 
         <form
           className="space-y-4 rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm"
-          onSubmit={handleArticleSubmit}
+          onSubmit={(event) => void handleArticleSubmit(event)}
         >
           <h2 className="text-lg font-semibold">Загрузка статьи</h2>
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Автор</span>
-            <input
-              className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-              value={articleForm.authorName}
-              onChange={(event) =>
-                setArticleForm((prev) => ({
-                  ...prev,
-                  authorName: event.target.value,
-                }))
-              }
-              placeholder="Иван Иванов"
-            />
-          </label>
+
+          <div className="rounded-xl bg-[#F5F5DC] px-3 py-2 text-sm text-[#5D4128]">
+            Автор: {authStore.user.fullName}
+          </div>
 
           <label className="block space-y-1">
             <span className="text-sm text-[#6A4A2D]">Название статьи</span>
@@ -301,7 +315,7 @@ const ParticipantView = observer(() => {
               onChange={(event) =>
                 setArticleForm((prev) => ({
                   ...prev,
-                  fileName: event.target.files?.[0]?.name ?? "",
+                  file: event.target.files?.[0] ?? null,
                 }))
               }
             />
@@ -366,7 +380,12 @@ const ParticipantView = observer(() => {
                   <p className="text-[#816040]">
                     {article.authorName} · {article.sectionName}
                   </p>
-                  <p className="text-xs text-[#9C7A56]">{article.fileName}</p>
+                  <Link
+                    href={article.fileDownloadUrl}
+                    className="text-xs text-[#734222] underline"
+                  >
+                    {article.fileName}
+                  </Link>
                 </li>
               ))}
             </ul>

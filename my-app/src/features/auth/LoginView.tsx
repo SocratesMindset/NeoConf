@@ -1,14 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
+import { observer } from "mobx-react-lite";
+import { useStore } from "@/app/providers/StoreProvider";
+import { roleHomePaths } from "@/lib/client-auth";
 
 type Notice = {
   type: "success" | "error";
   text: string;
 } | null;
 
-const LoginView = () => {
+const LoginView = observer(() => {
+  const router = useRouter();
+  const { authStore } = useStore();
   const [form, setForm] = useState({
     email: "",
     password: "",
@@ -16,24 +22,32 @@ const LoginView = () => {
   });
   const [notice, setNotice] = useState<Notice>(null);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const email = form.email.trim();
-    const password = form.password.trim();
+    try {
+      const user = await authStore.login({
+        email: form.email,
+        password: form.password,
+      });
 
-    if (!email || !password) {
+      setNotice({
+        type: "success",
+        text: "Авторизация успешна. Перенаправляем в рабочий кабинет.",
+      });
+      router.push(roleHomePaths[user.role]);
+    } catch (error) {
       setNotice({
         type: "error",
-        text: "Заполните email и пароль.",
+        text:
+          typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof error.message === "string"
+            ? error.message
+            : "Не удалось выполнить вход.",
       });
-      return;
     }
-
-    setNotice({
-      type: "success",
-      text: "Форма входа готова. Интеграцию с API подключим на следующем этапе.",
-    });
   }
 
   return (
@@ -42,9 +56,11 @@ const LoginView = () => {
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#816040]">
           Авторизация
         </p>
-        <h1 className="text-3xl font-semibold tracking-tight">Вход в систему</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">
+          Вход в систему
+        </h1>
         <p className="text-sm text-[#6A4A2D]">
-          Пока это фронтовый макет без бэкенда и базы данных.
+          Вход работает через сессию и серверную проверку учётных данных.
         </p>
       </header>
 
@@ -91,7 +107,13 @@ const LoginView = () => {
         </label>
 
         {notice ? (
-          <p className={notice.type === "success" ? "text-sm text-emerald-700" : "text-sm text-red-700"}>
+          <p
+            className={
+              notice.type === "success"
+                ? "text-sm text-emerald-700"
+                : "text-sm text-red-700"
+            }
+          >
             {notice.text}
           </p>
         ) : null}
@@ -99,19 +121,23 @@ const LoginView = () => {
         <button
           className="w-full rounded-full bg-[#734222] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#8A4F29]"
           type="submit"
+          disabled={authStore.isSubmitting}
         >
-          Войти
+          {authStore.isSubmitting ? "Входим..." : "Войти"}
         </button>
       </form>
 
       <p className="text-sm text-[#6A4A2D]">
         Нет аккаунта?{" "}
-        <Link className="font-semibold text-[#734222] underline" href="/auth/register">
+        <Link
+          className="font-semibold text-[#734222] underline"
+          href="/auth/register"
+        >
           Зарегистрироваться
         </Link>
       </p>
     </section>
   );
-};
+});
 
 export default LoginView;

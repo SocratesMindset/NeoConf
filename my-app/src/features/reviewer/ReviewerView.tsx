@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { type FormEvent, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useStore } from "@/app/providers/StoreProvider";
@@ -17,46 +18,75 @@ function formatDate(dateIso: string) {
 }
 
 const ReviewerView = observer(() => {
-  const { conferenceStore } = useStore();
+  const { authStore, conferenceStore } = useStore();
   const [notice, setNotice] = useState<Notice>(null);
   const [form, setForm] = useState({
-    reviewerName: "",
-    reviewerEmail: "",
     articleId: "",
     score: "8",
     comment: "",
   });
 
-  const reviewerEmail = form.reviewerEmail.trim().toLowerCase();
+  const reviewerEmail = authStore.user?.email.trim().toLowerCase() ?? "";
   const visibleAssignments = reviewerEmail
     ? conferenceStore.reviewerAssignments.filter(
         (assignment) => assignment.reviewerEmail.toLowerCase() === reviewerEmail,
       )
-    : conferenceStore.reviewerAssignments;
+    : [];
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      conferenceStore.submitReview({
+      await conferenceStore.submitReview({
         articleId: form.articleId,
-        reviewerName: form.reviewerName,
-        reviewerEmail: form.reviewerEmail,
         score: Number(form.score),
         comment: form.comment,
       });
       setNotice({ type: "success", text: "Рецензия сохранена." });
-      setForm((prev) => ({
-        ...prev,
+      setForm({
         articleId: "",
         score: "8",
         comment: "",
-      }));
+      });
     } catch (error) {
       setNotice({
         type: "error",
-        text: error instanceof Error ? error.message : "Не удалось сохранить рецензию.",
+        text:
+          typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof error.message === "string"
+            ? error.message
+            : "Не удалось сохранить рецензию.",
       });
     }
+  }
+
+  if (!authStore.user) {
+    return (
+      <section className="space-y-4">
+        <h1 className="text-3xl font-semibold tracking-tight">Страница рецензента</h1>
+        <p className="text-[#6A4A2D]">
+          Для работы со статьями нужно войти под аккаунтом рецензента.
+        </p>
+        <Link
+          href="/auth/login"
+          className="inline-flex rounded-full bg-[#734222] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#8A4F29]"
+        >
+          Войти
+        </Link>
+      </section>
+    );
+  }
+
+  if (authStore.user.role !== "reviewer") {
+    return (
+      <section className="space-y-4">
+        <h1 className="text-3xl font-semibold tracking-tight">Страница рецензента</h1>
+        <p className="text-[#6A4A2D]">
+          Эта страница доступна только для роли рецензента.
+        </p>
+      </section>
+    );
   }
 
   return (
@@ -71,33 +101,13 @@ const ReviewerView = observer(() => {
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <form
           className="space-y-4 rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm"
-          onSubmit={handleSubmit}
+          onSubmit={(event) => void handleSubmit(event)}
         >
           <h2 className="text-lg font-semibold">Новая рецензия</h2>
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Имя рецензента</span>
-            <input
-              className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-              value={form.reviewerName}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, reviewerName: event.target.value }))
-              }
-              placeholder="Мария Петрова"
-            />
-          </label>
 
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Email рецензента</span>
-            <input
-              className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-              type="email"
-              value={form.reviewerEmail}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, reviewerEmail: event.target.value }))
-              }
-              placeholder="reviewer@example.com"
-            />
-          </label>
+          <div className="rounded-xl bg-[#F5F5DC] px-3 py-2 text-sm text-[#5D4128]">
+            {authStore.user.fullName} · {authStore.user.email}
+          </div>
 
           <label className="block space-y-1">
             <span className="text-sm text-[#6A4A2D]">Статья</span>
@@ -178,7 +188,7 @@ const ReviewerView = observer(() => {
               </ul>
             ) : (
               <p className="mt-3 text-sm text-[#816040]">
-                Назначений пока нет. Укажите email, чтобы отфильтровать свои.
+                Для вашего аккаунта пока нет назначений.
               </p>
             )}
           </div>
