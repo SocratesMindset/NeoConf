@@ -12,6 +12,7 @@ export interface AuthUser {
   fullName: string;
   email: string;
   role: AppRole;
+  roles: AppRole[];
   createdAt: string;
 }
 
@@ -26,6 +27,8 @@ export interface Conference {
 export interface ParticipantRegistration {
   id: string;
   conferenceId: string;
+  userId: string;
+  userRoles: AppRole[];
   participantName: string;
   participantEmail: string;
   createdAt: string;
@@ -48,6 +51,7 @@ export interface Article {
 export interface ReviewerAssignment {
   id: string;
   articleId: string;
+  reviewerUserId: string | null;
   reviewerName: string;
   reviewerEmail: string;
   assignedBy: string;
@@ -68,6 +72,7 @@ export interface SectionRepresentative {
   id: string;
   conferenceId: string;
   sectionName: string;
+  representativeUserId: string | null;
   representativeName: string;
   representativeEmail: string;
   createdAt: string;

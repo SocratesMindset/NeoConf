@@ -7,7 +7,7 @@ import { participantRegistrationSchema } from "@/lib/validators";
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireUser(request, ["PARTICIPANT"]);
+    const user = await requireUser(request);
     const payload = participantRegistrationSchema.parse(await request.json());
 
     const conference = await prisma.conference.findUnique({
@@ -28,8 +28,11 @@ export async function POST(request: NextRequest) {
       include: {
         user: {
           select: {
+            id: true,
             fullName: true,
             email: true,
+            role: true,
+            roles: true,
           },
         },
       },

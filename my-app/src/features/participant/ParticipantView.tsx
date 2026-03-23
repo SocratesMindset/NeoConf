@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useStore } from "@/app/providers/StoreProvider";
+import { userHasRole } from "@/lib/client-auth";
 
 type Notice = {
   type: "success" | "error";
@@ -20,6 +21,8 @@ function formatDate(dateIso: string) {
 const ParticipantView = observer(() => {
   const { authStore, conferenceStore } = useStore();
   const conferences = conferenceStore.conferences;
+  const hasParticipantRole = userHasRole(authStore.user, "participant");
+  const currentUserEmail = authStore.user?.email.trim().toLowerCase() ?? "";
 
   const [registrationForm, setRegistrationForm] = useState({
     conferenceId: "",
@@ -43,17 +46,37 @@ const ParticipantView = observer(() => {
     }
 
     if (!articleForm.conferenceId && defaultConferenceId) {
-      const sections = conferenceStore.getSectionsForConference(defaultConferenceId);
+      const sections =
+        conferenceStore.getSectionsForConference(defaultConferenceId);
       setArticleForm((prev) => ({
         ...prev,
         conferenceId: defaultConferenceId,
         sectionName: sections[0] ?? "",
       }));
     }
-  }, [articleForm.conferenceId, conferenceStore, conferences, registrationForm.conferenceId]);
+  }, [
+    articleForm.conferenceId,
+    conferenceStore,
+    conferences,
+    registrationForm.conferenceId,
+  ]);
 
   const recentArticles = conferenceStore.articles.slice(0, 5);
-  const recentRegistrations = conferenceStore.participantRegistrations.slice(0, 5);
+  const recentRegistrations = conferenceStore.participantRegistrations.slice(
+    0,
+    5,
+  );
+  const myArticles = conferenceStore.articles.filter(
+    (article) => article.authorEmail.toLowerCase() === currentUserEmail,
+  );
+  const myArticleIds = new Set(myArticles.map((article) => article.id));
+  const myReviews = conferenceStore.reviews
+    .filter((review) => myArticleIds.has(review.articleId))
+    .sort(
+      (left, right) =>
+        new Date(right.createdAt).getTime() -
+        new Date(left.createdAt).getTime(),
+    );
   const articleSections = articleForm.conferenceId
     ? conferenceStore.getSectionsForConference(articleForm.conferenceId)
     : [];
@@ -128,9 +151,12 @@ const ParticipantView = observer(() => {
   if (!authStore.user) {
     return (
       <section className="space-y-4">
-        <h1 className="text-3xl font-semibold tracking-tight">Страница участника</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">
+          Страница участника
+        </h1>
         <p className="text-[#6A4A2D]">
-          Для регистрации на конференцию и отправки статьи нужно войти в систему.
+          Для регистрации на конференцию и отправки статьи нужно войти в
+          систему.
         </p>
         <Link
           href="/auth/login"
@@ -142,17 +168,6 @@ const ParticipantView = observer(() => {
     );
   }
 
-  if (authStore.user.role !== "participant") {
-    return (
-      <section className="space-y-4">
-        <h1 className="text-3xl font-semibold tracking-tight">Страница участника</h1>
-        <p className="text-[#6A4A2D]">
-          Эта страница доступна только для роли участника.
-        </p>
-      </section>
-    );
-  }
-
   return (
     <section className="space-y-8">
       <header className="space-y-2">
@@ -160,7 +175,8 @@ const ParticipantView = observer(() => {
           Страница участника
         </h1>
         <p className="text-[#6A4A2D]">
-          Участник регистрируется на конференцию и отправляет статью.
+          Здесь можно зарегистрироваться на конференцию. Отправка статьи
+          доступна пользователям с ролью участника.
         </p>
       </header>
 
@@ -215,134 +231,149 @@ const ParticipantView = observer(() => {
           </button>
         </form>
 
-        <form
-          className="space-y-4 rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm"
-          onSubmit={(event) => void handleArticleSubmit(event)}
-        >
-          <h2 className="text-lg font-semibold">Загрузка статьи</h2>
-
-          <div className="rounded-xl bg-[#F5F5DC] px-3 py-2 text-sm text-[#5D4128]">
-            Автор: {authStore.user.fullName}
-          </div>
-
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Название статьи</span>
-            <input
-              className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-              value={articleForm.title}
-              onChange={(event) =>
-                setArticleForm((prev) => ({
-                  ...prev,
-                  title: event.target.value,
-                }))
-              }
-              placeholder="Например: Data Pipelines in 2026"
-            />
-          </label>
-
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Аннотация</span>
-            <textarea
-              className="min-h-24 w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-              value={articleForm.abstract}
-              onChange={(event) =>
-                setArticleForm((prev) => ({
-                  ...prev,
-                  abstract: event.target.value,
-                }))
-              }
-              placeholder="Кратко опишите содержание статьи"
-            />
-          </label>
-
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Конференция</span>
-            <select
-              className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-              value={articleForm.conferenceId}
-              onChange={(event) =>
-                setArticleForm((prev) => {
-                  const nextConferenceId = event.target.value;
-                  const nextSections = nextConferenceId
-                    ? conferenceStore.getSectionsForConference(nextConferenceId)
-                    : [];
-
-                  return {
-                    ...prev,
-                    conferenceId: nextConferenceId,
-                    sectionName: nextSections[0] ?? "",
-                  };
-                })
-              }
-            >
-              <option value="">Выберите конференцию</option>
-              {conferences.map((conference) => (
-                <option key={conference.id} value={conference.id}>
-                  {conference.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Секция</span>
-            <select
-              className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-              value={articleForm.sectionName}
-              onChange={(event) =>
-                setArticleForm((prev) => ({
-                  ...prev,
-                  sectionName: event.target.value,
-                }))
-              }
-            >
-              <option value="">Выберите секцию</option>
-              {articleSections.map((sectionName) => (
-                <option key={sectionName} value={sectionName}>
-                  {sectionName}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Файл статьи</span>
-            <input
-              key={fileInputKey}
-              className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none file:mr-3 file:rounded-full file:border-0 file:bg-[#734222] file:px-4 file:py-2 file:text-xs file:font-medium file:text-white hover:file:bg-[#8A4F29]"
-              type="file"
-              accept=".pdf,.doc,.docx"
-              onChange={(event) =>
-                setArticleForm((prev) => ({
-                  ...prev,
-                  file: event.target.files?.[0] ?? null,
-                }))
-              }
-            />
-          </label>
-
-          {articleNotice ? (
-            <p
-              className={
-                articleNotice.type === "success"
-                  ? "text-sm text-emerald-700"
-                  : "text-sm text-red-700"
-              }
-            >
-              {articleNotice.text}
-            </p>
-          ) : null}
-
-          <button
-            className="rounded-full bg-[#734222] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#8A4F29]"
-            type="submit"
+        {hasParticipantRole ? (
+          <form
+            className="space-y-4 rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm"
+            onSubmit={(event) => void handleArticleSubmit(event)}
           >
-            Отправить статью
-          </button>
-        </form>
+            <h2 className="text-lg font-semibold">Загрузка статьи</h2>
+
+            <div className="rounded-xl bg-[#F5F5DC] px-3 py-2 text-sm text-[#5D4128]">
+              Автор: {authStore.user.fullName}
+            </div>
+
+            <label className="block space-y-1">
+              <span className="text-sm text-[#6A4A2D]">Название статьи</span>
+              <input
+                className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
+                value={articleForm.title}
+                onChange={(event) =>
+                  setArticleForm((prev) => ({
+                    ...prev,
+                    title: event.target.value,
+                  }))
+                }
+                placeholder="Например: Data Pipelines in 2026"
+              />
+            </label>
+
+            <label className="block space-y-1">
+              <span className="text-sm text-[#6A4A2D]">Аннотация</span>
+              <textarea
+                className="min-h-24 w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
+                value={articleForm.abstract}
+                onChange={(event) =>
+                  setArticleForm((prev) => ({
+                    ...prev,
+                    abstract: event.target.value,
+                  }))
+                }
+                placeholder="Кратко опишите содержание статьи"
+              />
+            </label>
+
+            <label className="block space-y-1">
+              <span className="text-sm text-[#6A4A2D]">Конференция</span>
+              <select
+                className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
+                value={articleForm.conferenceId}
+                onChange={(event) =>
+                  setArticleForm((prev) => {
+                    const nextConferenceId = event.target.value;
+                    const nextSections = nextConferenceId
+                      ? conferenceStore.getSectionsForConference(
+                          nextConferenceId,
+                        )
+                      : [];
+
+                    return {
+                      ...prev,
+                      conferenceId: nextConferenceId,
+                      sectionName: nextSections[0] ?? "",
+                    };
+                  })
+                }
+              >
+                <option value="">Выберите конференцию</option>
+                {conferences.map((conference) => (
+                  <option key={conference.id} value={conference.id}>
+                    {conference.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block space-y-1">
+              <span className="text-sm text-[#6A4A2D]">Секция</span>
+              <select
+                className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
+                value={articleForm.sectionName}
+                onChange={(event) =>
+                  setArticleForm((prev) => ({
+                    ...prev,
+                    sectionName: event.target.value,
+                  }))
+                }
+              >
+                <option value="">Выберите секцию</option>
+                {articleSections.map((sectionName) => (
+                  <option key={sectionName} value={sectionName}>
+                    {sectionName}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block space-y-1">
+              <span className="text-sm text-[#6A4A2D]">Файл статьи</span>
+              <input
+                key={fileInputKey}
+                className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none file:mr-3 file:rounded-full file:border-0 file:bg-[#734222] file:px-4 file:py-2 file:text-xs file:font-medium file:text-white hover:file:bg-[#8A4F29]"
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={(event) =>
+                  setArticleForm((prev) => ({
+                    ...prev,
+                    file: event.target.files?.[0] ?? null,
+                  }))
+                }
+              />
+            </label>
+
+            {articleNotice ? (
+              <p
+                className={
+                  articleNotice.type === "success"
+                    ? "text-sm text-emerald-700"
+                    : "text-sm text-red-700"
+                }
+              >
+                {articleNotice.text}
+              </p>
+            ) : null}
+
+            <button
+              className="rounded-full bg-[#734222] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#8A4F29]"
+              type="submit"
+            >
+              Отправить статью
+            </button>
+          </form>
+        ) : (
+          <div className="space-y-4 rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
+            <h2 className="text-lg font-semibold">Загрузка статьи</h2>
+            <p className="text-sm text-[#6A4A2D]">
+              Отправка статьи доступна только пользователям с ролью участника.
+            </p>
+            <p className="rounded-xl bg-[#F5F5DC] px-3 py-2 text-sm text-[#5D4128]">
+              Ваш аккаунт можно зарегистрировать на конференцию, но для подачи
+              статьи нужна роль участника.
+            </p>
+          </div>
+        )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
           <h3 className="text-base font-semibold">Последние регистрации</h3>
           {recentRegistrations.length ? (
@@ -391,6 +422,42 @@ const ParticipantView = observer(() => {
             </ul>
           ) : (
             <p className="mt-3 text-sm text-[#816040]">Статей пока нет.</p>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
+          <h3 className="text-base font-semibold">Рецензии по моим статьям</h3>
+          {myReviews.length ? (
+            <ul className="mt-3 space-y-2 text-sm text-[#5D4128]">
+              {myReviews.map((review) => {
+                const article = conferenceStore.getArticleById(
+                  review.articleId,
+                );
+                return (
+                  <li
+                    key={review.id}
+                    className="rounded-xl bg-[#F5F5DC] px-3 py-2"
+                  >
+                    <p className="font-medium">
+                      {article?.title ?? "Статья удалена"}
+                    </p>
+                    <p className="text-[#816040]">
+                      {review.reviewerName} · Оценка: {review.score}/10
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap text-[#5D4128]">
+                      {review.comment}
+                    </p>
+                    <p className="mt-1 text-xs text-[#9C7A56]">
+                      {formatDate(review.createdAt)}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-[#816040]">
+              По вашим статьям пока нет рецензий.
+            </p>
           )}
         </div>
       </div>

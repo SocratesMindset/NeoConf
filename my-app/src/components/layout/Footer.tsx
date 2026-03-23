@@ -3,11 +3,14 @@ import Link from "next/link";
 export function Footer() {
   return (
     <footer className="border-t border-[#8F5A34] bg-[#734222] text-[#F8EED5]">
-      <div className="mx-auto grid max-w-5xl gap-6 px-6 py-8 text-sm md:grid-cols-3">
+      <div className="grid w-full gap-6 px-6 py-8 text-sm md:grid-cols-3">
         <div>
           <div className="text-base font-semibold text-[#FFF4DE]">NeoConf</div>
           <p className="mt-2 text-[#EBD4AC]">
-            Короткое описание проекта в 1–2 строки.
+            NeoConf - отечесвтенное решение для автоматизации процесса
+            проведения конференций. Мы предлагаем инновационные инструменты и
+            сервисы, которые упрощают организацию и управление конференциями,
+            обеспечивая высокое качество и эффективность.
           </p>
         </div>
 
@@ -68,13 +71,13 @@ export function Footer() {
           <div className="text-xs font-semibold uppercase tracking-wide text-[#DDBD8F]">
             Контакты
           </div>
-          <p className="mt-2">hello@neoconf.dev</p>
-          <p className="text-[#EBD4AC]">GitHub · Telegram</p>
+          <p className="mt-2">artur251373@gmail.com</p>
+          <p className="text-[#EBD4AC]">GitHub · SocratesMindset</p>
         </div>
       </div>
 
       <div className="border-t border-[#8F5A34]">
-        <div className="mx-auto max-w-5xl px-6 py-4 text-xs text-[#DDBD8F]">
+        <div className="w-full px-6 py-4 text-xs text-[#DDBD8F]">
           © 2026 NeoConf. Все права защищены.
         </div>
       </div>

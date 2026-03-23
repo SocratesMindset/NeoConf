@@ -23,8 +23,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    void store.authStore.hydrate();
-    void store.conferenceStore.loadState();
+    void store.authStore.hydrate().catch((error: unknown) => {
+      console.error("Failed to hydrate auth state", error);
+    });
+    void store.conferenceStore.loadState().catch((error: unknown) => {
+      console.error("Failed to load app state", error);
+    });
   }, []);
 
   return (

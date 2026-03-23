@@ -15,7 +15,7 @@ type CurrentUserResponse = {
 interface RegisterInput {
   fullName: string;
   email: string;
-  role: AppRole;
+  roles: AppRole[];
   password: string;
   confirmPassword: string;
   agreeWithPolicy: boolean;

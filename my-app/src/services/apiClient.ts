@@ -1,7 +1,12 @@
-type ApiError = {
+export class ApiRequestError extends Error {
   status: number;
-  message: string;
-};
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+  }
+}
 
 export async function apiRequest<T>(
   path: string,
@@ -29,11 +34,7 @@ export async function apiRequest<T>(
       // Ignore invalid JSON error responses.
     }
 
-    const error: ApiError = {
-      status: response.status,
-      message,
-    };
-    throw error;
+    throw new ApiRequestError(response.status, message);
   }
 
   if (response.status === 204) {

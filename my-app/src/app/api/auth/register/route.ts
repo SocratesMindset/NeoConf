@@ -4,7 +4,7 @@ import { ApiError, handleApiError } from "@/lib/api";
 import { createSession, setSessionCookie } from "@/lib/auth/session";
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
-import { appRoleToDbRole, normalizeEmail } from "@/lib/roles";
+import { appRolesToDbRoles, normalizeEmail } from "@/lib/roles";
 import { serializeUser } from "@/lib/serializers";
 import { registerSchema } from "@/lib/validators";
 
@@ -12,6 +12,7 @@ export async function POST(request: NextRequest) {
   try {
     const payload = registerSchema.parse(await request.json());
     const email = normalizeEmail(payload.email);
+    const roles = appRolesToDbRoles(payload.roles);
 
     const existingUser = await prisma.user.findUnique({
       where: {
@@ -27,7 +28,8 @@ export async function POST(request: NextRequest) {
       data: {
         fullName: payload.fullName.trim(),
         email,
-        role: appRoleToDbRole(payload.role),
+        role: roles[0],
+        roles,
         passwordHash: await hashPassword(payload.password),
       },
     });

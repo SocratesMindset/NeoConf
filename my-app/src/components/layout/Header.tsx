@@ -4,7 +4,6 @@ import Link from "next/link";
 import { observer } from "mobx-react-lite";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/app/providers/StoreProvider";
-import { roleHomePaths, roleLabels } from "@/lib/client-auth";
 
 const navigationItems = [
   { href: "/", label: "Главная" },
@@ -12,6 +11,7 @@ const navigationItems = [
   { href: "/reviewer", label: "Рецензент" },
   { href: "/section-chair", label: "Председатель секции" },
   { href: "/admin", label: "Админ" },
+  { href: "/instruction", label: "Инструкция" },
 ];
 
 export const Header = observer(function Header() {
@@ -19,23 +19,21 @@ export const Header = observer(function Header() {
   const { authStore } = useStore();
 
   async function handleLogout() {
-    await authStore.logout();
-    router.push("/");
+    try {
+      await authStore.logout();
+      router.push("/");
+    } catch (error) {
+      console.error("Failed to logout", error);
+    }
   }
 
   return (
     <header className="border-b border-[#D8C8A8] bg-[#734222] backdrop-blur">
-      <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex w-full flex-col gap-3 px-6 py-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3 text-lg font-semibold tracking-tight">
-          <Link href="/">NeoConf</Link>
-          {authStore.user ? (
-            <Link
-              href={roleHomePaths[authStore.user.role]}
-              className="rounded-full border border-[#D8C8A8] bg-[#8A4F29] px-3 py-1 text-xs font-medium text-[#FDF9E8]"
-            >
-              {roleLabels[authStore.user.role]}
-            </Link>
-          ) : null}
+          <Link className="text-white text-5xl" href="/">
+            NeoConf
+          </Link>
         </div>
         <nav className="flex flex-wrap items-center gap-2 text-sm">
           {navigationItems.map((item) => (

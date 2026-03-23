@@ -19,13 +19,16 @@ model User {
   fullName      String
   email         String                   @unique
   role          UserRole
+  roles         UserRole[]               @default([])
   passwordHash  String
   createdAt     DateTime                 @default(now())
   updatedAt     DateTime                 @updatedAt
   sessions      Session[]
   registrations ConferenceRegistration[]
   articles      Article[]
+  reviewerAssignments ReviewerAssignment[] @relation("AssignedReviewer")
   reviews       Review[]
+  sectionRepresentatives SectionRepresentative[] @relation("SectionRepresentativeUser")
 }
 
 model Session {
@@ -91,14 +94,18 @@ model ReviewerAssignment {
   id            String   @id @default(cuid())
   reviewerName  String
   reviewerEmail String
+  reviewerUserId String?
   assignedBy    String
   createdAt     DateTime @default(now())
   articleId     String
   article       Article   @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  reviewerUser  User?     @relation("AssignedReviewer", fields: [reviewerUserId], references: [id], onDelete: SetNull)
 
   @@unique([articleId, reviewerEmail])
+  @@unique([articleId, reviewerUserId])
   @@index([articleId])
   @@index([reviewerEmail])
+  @@index([reviewerUserId])
 }
 
 model Review {
@@ -122,11 +129,14 @@ model SectionRepresentative {
   sectionName         String
   representativeName  String
   representativeEmail String
+  representativeUserId String?
   createdAt           DateTime   @default(now())
   conferenceId        String
   conference          Conference @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  representativeUser  User?      @relation("SectionRepresentativeUser", fields: [representativeUserId], references: [id], onDelete: SetNull)
 
   @@unique([conferenceId, sectionName])
   @@index([conferenceId])
   @@index([representativeEmail])
+  @@index([representativeUserId])
 }

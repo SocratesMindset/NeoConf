@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type FormEvent, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useStore } from "@/app/providers/StoreProvider";
+import { userHasRole } from "@/lib/client-auth";
 
 type Notice = {
   type: "success" | "error";
@@ -27,11 +28,18 @@ const ReviewerView = observer(() => {
   });
 
   const reviewerEmail = authStore.user?.email.trim().toLowerCase() ?? "";
-  const visibleAssignments = reviewerEmail
+  const visibleAssignments = authStore.user
     ? conferenceStore.reviewerAssignments.filter(
-        (assignment) => assignment.reviewerEmail.toLowerCase() === reviewerEmail,
+        (assignment) =>
+          assignment.reviewerUserId === authStore.user?.id ||
+          assignment.reviewerEmail.toLowerCase() === reviewerEmail,
       )
     : [];
+  const canAccessAsReviewer =
+    userHasRole(authStore.user, "reviewer") || visibleAssignments.length > 0;
+  const selectedArticle = form.articleId
+    ? conferenceStore.getArticleById(form.articleId)
+    : null;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -64,7 +72,9 @@ const ReviewerView = observer(() => {
   if (!authStore.user) {
     return (
       <section className="space-y-4">
-        <h1 className="text-3xl font-semibold tracking-tight">Страница рецензента</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">
+          Страница рецензента
+        </h1>
         <p className="text-[#6A4A2D]">
           Для работы со статьями нужно войти под аккаунтом рецензента.
         </p>
@@ -78,12 +88,15 @@ const ReviewerView = observer(() => {
     );
   }
 
-  if (authStore.user.role !== "reviewer") {
+  if (!canAccessAsReviewer) {
     return (
       <section className="space-y-4">
-        <h1 className="text-3xl font-semibold tracking-tight">Страница рецензента</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">
+          Страница рецензента
+        </h1>
         <p className="text-[#6A4A2D]">
-          Эта страница доступна только для роли рецензента.
+          Эта страница доступна пользователю, которому назначены статьи для
+          рецензирования.
         </p>
       </section>
     );
@@ -92,7 +105,9 @@ const ReviewerView = observer(() => {
   return (
     <section className="space-y-8">
       <header className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Страница рецензента</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">
+          Страница рецензента
+        </h1>
         <p className="text-[#6A4A2D]">
           Рецензент оставляет рецензии только по назначенным ему статьям.
         </p>
@@ -120,7 +135,9 @@ const ReviewerView = observer(() => {
             >
               <option value="">Выберите статью</option>
               {visibleAssignments.map((assignment) => {
-                const article = conferenceStore.getArticleById(assignment.articleId);
+                const article = conferenceStore.getArticleById(
+                  assignment.articleId,
+                );
                 if (!article) {
                   return null;
                 }
@@ -133,6 +150,21 @@ const ReviewerView = observer(() => {
             </select>
           </label>
 
+          {selectedArticle ? (
+            <div className="rounded-xl bg-[#F5F5DC] px-3 py-3 text-sm text-[#5D4128]">
+              <p className="font-medium">{selectedArticle.title}</p>
+              <p className="text-[#816040]">
+                {selectedArticle.authorName} · {selectedArticle.sectionName}
+              </p>
+              <Link
+                href={selectedArticle.fileDownloadUrl}
+                className="mt-2 inline-flex text-xs text-[#734222] underline"
+              >
+                Скачать статью: {selectedArticle.fileName}
+              </Link>
+            </div>
+          ) : null}
+
           <label className="block space-y-1">
             <span className="text-sm text-[#6A4A2D]">Оценка (1-10)</span>
             <input
@@ -141,7 +173,9 @@ const ReviewerView = observer(() => {
               min={1}
               max={10}
               value={form.score}
-              onChange={(event) => setForm((prev) => ({ ...prev, score: event.target.value }))}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, score: event.target.value }))
+              }
             />
           </label>
 
@@ -158,7 +192,13 @@ const ReviewerView = observer(() => {
           </label>
 
           {notice ? (
-            <p className={notice.type === "success" ? "text-sm text-emerald-700" : "text-sm text-red-700"}>
+            <p
+              className={
+                notice.type === "success"
+                  ? "text-sm text-emerald-700"
+                  : "text-sm text-red-700"
+              }
+            >
               {notice.text}
             </p>
           ) : null}
@@ -177,11 +217,28 @@ const ReviewerView = observer(() => {
             {visibleAssignments.length ? (
               <ul className="mt-3 space-y-2 text-sm">
                 {visibleAssignments.map((assignment) => {
-                  const article = conferenceStore.getArticleById(assignment.articleId);
+                  const article = conferenceStore.getArticleById(
+                    assignment.articleId,
+                  );
                   return (
-                    <li key={assignment.id} className="rounded-xl bg-[#F5F5DC] px-3 py-2">
-                      <p className="font-medium">{article?.title ?? "Статья удалена"}</p>
-                      <p className="text-[#816040]">Назначил: {assignment.assignedBy}</p>
+                    <li
+                      key={assignment.id}
+                      className="rounded-xl bg-[#F5F5DC] px-3 py-2"
+                    >
+                      <p className="font-medium">
+                        {article?.title ?? "Статья удалена"}
+                      </p>
+                      <p className="text-[#816040]">
+                        Назначил: {assignment.assignedBy}
+                      </p>
+                      {article ? (
+                        <Link
+                          href={article.fileDownloadUrl}
+                          className="mt-1 inline-flex text-xs text-[#734222] underline"
+                        >
+                          Скачать статью
+                        </Link>
+                      ) : null}
                     </li>
                   );
                 })}
@@ -198,14 +255,23 @@ const ReviewerView = observer(() => {
             {conferenceStore.reviews.length ? (
               <ul className="mt-3 space-y-2 text-sm">
                 {conferenceStore.reviews.slice(0, 6).map((review) => {
-                  const article = conferenceStore.getArticleById(review.articleId);
+                  const article = conferenceStore.getArticleById(
+                    review.articleId,
+                  );
                   return (
-                    <li key={review.id} className="rounded-xl bg-[#F5F5DC] px-3 py-2">
-                      <p className="font-medium">{article?.title ?? "Статья не найдена"}</p>
+                    <li
+                      key={review.id}
+                      className="rounded-xl bg-[#F5F5DC] px-3 py-2"
+                    >
+                      <p className="font-medium">
+                        {article?.title ?? "Статья не найдена"}
+                      </p>
                       <p className="text-[#816040]">
                         {review.reviewerName} · {review.score}/10
                       </p>
-                      <p className="text-xs text-[#9C7A56]">{formatDate(review.createdAt)}</p>
+                      <p className="text-xs text-[#9C7A56]">
+                        {formatDate(review.createdAt)}
+                      </p>
                     </li>
                   );
                 })}

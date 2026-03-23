@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useStore } from "@/app/providers/StoreProvider";
+import { userHasRole } from "@/lib/client-auth";
 
 type Notice = {
   type: "success" | "error";
@@ -27,11 +28,21 @@ const AdminView = observer(() => {
   const [sectionRepForm, setSectionRepForm] = useState({
     conferenceId: "",
     sectionName: "",
-    representativeName: "",
-    representativeEmail: "",
+    representativeUserId: "",
   });
   const [conferenceNotice, setConferenceNotice] = useState<Notice>(null);
-  const [representativeNotice, setRepresentativeNotice] = useState<Notice>(null);
+  const [representativeNotice, setRepresentativeNotice] =
+    useState<Notice>(null);
+
+  const eligibleSectionChairs = useMemo(() => {
+    if (!sectionRepForm.conferenceId) {
+      return [];
+    }
+
+    return conferenceStore.getRegistrationsForConference(
+      sectionRepForm.conferenceId,
+    );
+  }, [conferenceStore, sectionRepForm.conferenceId]);
 
   useEffect(() => {
     if (!sectionRepForm.conferenceId && conferenceStore.conferences[0]?.id) {
@@ -41,6 +52,28 @@ const AdminView = observer(() => {
       }));
     }
   }, [conferenceStore.conferences, sectionRepForm.conferenceId]);
+
+  useEffect(() => {
+    const isSelectedUserAvailable = eligibleSectionChairs.some(
+      (registration) =>
+        registration.userId === sectionRepForm.representativeUserId,
+    );
+
+    if (eligibleSectionChairs.length && !isSelectedUserAvailable) {
+      setSectionRepForm((prev) => ({
+        ...prev,
+        representativeUserId: eligibleSectionChairs[0]?.userId ?? "",
+      }));
+    } else if (
+      !eligibleSectionChairs.length &&
+      sectionRepForm.representativeUserId
+    ) {
+      setSectionRepForm((prev) => ({
+        ...prev,
+        representativeUserId: "",
+      }));
+    }
+  }, [eligibleSectionChairs, sectionRepForm.representativeUserId]);
 
   async function handleCreateConference(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -68,13 +101,12 @@ const AdminView = observer(() => {
       await conferenceStore.assignSectionRepresentative(sectionRepForm);
       setRepresentativeNotice({
         type: "success",
-        text: "Представитель секции назначен.",
+        text: "Председатель секции назначен.",
       });
       setSectionRepForm((prev) => ({
         ...prev,
         sectionName: "",
-        representativeName: "",
-        representativeEmail: "",
+        representativeUserId: eligibleSectionChairs[0]?.userId ?? "",
       }));
     } catch (error) {
       setRepresentativeNotice({
@@ -85,7 +117,7 @@ const AdminView = observer(() => {
           "message" in error &&
           typeof error.message === "string"
             ? error.message
-            : "Не удалось назначить представителя.",
+            : "Не удалось назначить председателя секции.",
       });
     }
   }
@@ -107,7 +139,7 @@ const AdminView = observer(() => {
     );
   }
 
-  if (authStore.user.role !== "admin") {
+  if (!userHasRole(authStore.user, "admin")) {
     return (
       <section className="space-y-4">
         <h1 className="text-3xl font-semibold tracking-tight">Админ-панель</h1>
@@ -124,7 +156,8 @@ const AdminView = observer(() => {
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Админ-панель</h1>
         <p className="text-[#6A4A2D]">
-          Администратор создаёт конференции и назначает представителей секций.
+          Администратор создаёт конференции и назначает председателей секций из
+          числа пользователей, зарегистрированных на конференцию.
         </p>
       </header>
 
@@ -203,7 +236,10 @@ const AdminView = observer(() => {
           className="space-y-4 rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm"
           onSubmit={(event) => void handleAssignRepresentative(event)}
         >
-          <h2 className="text-lg font-semibold">Назначить представителя секции</h2>
+          <h2 className="text-lg font-semibold">
+            Назначить председателя секции
+          </h2>
+
           <label className="block space-y-1">
             <span className="text-sm text-[#6A4A2D]">Конференция</span>
             <select
@@ -241,35 +277,33 @@ const AdminView = observer(() => {
           </label>
 
           <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Имя представителя</span>
-            <input
+            <span className="text-sm text-[#6A4A2D]">Пользователь</span>
+            <select
               className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-              value={sectionRepForm.representativeName}
+              value={sectionRepForm.representativeUserId}
               onChange={(event) =>
                 setSectionRepForm((prev) => ({
                   ...prev,
-                  representativeName: event.target.value,
+                  representativeUserId: event.target.value,
                 }))
               }
-              placeholder="Екатерина Орлова"
-            />
+            >
+              <option value="">Выберите пользователя</option>
+              {eligibleSectionChairs.map((registration) => (
+                <option key={registration.userId} value={registration.userId}>
+                  {registration.participantName} ·{" "}
+                  {registration.participantEmail}
+                </option>
+              ))}
+            </select>
           </label>
 
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Email представителя</span>
-            <input
-              className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-              type="email"
-              value={sectionRepForm.representativeEmail}
-              onChange={(event) =>
-                setSectionRepForm((prev) => ({
-                  ...prev,
-                  representativeEmail: event.target.value,
-                }))
-              }
-              placeholder="section@example.com"
-            />
-          </label>
+          {sectionRepForm.conferenceId && !eligibleSectionChairs.length ? (
+            <p className="text-sm text-[#816040]">
+              На выбранной конференции нет зарегистрированных пользователей с
+              ролью председателя секции.
+            </p>
+          ) : null}
 
           {representativeNotice ? (
             <p
@@ -287,7 +321,7 @@ const AdminView = observer(() => {
             className="rounded-full bg-[#734222] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#8A4F29]"
             type="submit"
           >
-            Назначить представителя
+            Назначить председателя
           </button>
         </form>
       </div>
@@ -298,7 +332,10 @@ const AdminView = observer(() => {
           {conferenceStore.conferences.length ? (
             <ul className="mt-3 space-y-2 text-sm">
               {conferenceStore.conferences.map((conference) => (
-                <li key={conference.id} className="rounded-xl bg-[#F5F5DC] px-3 py-2">
+                <li
+                  key={conference.id}
+                  className="rounded-xl bg-[#F5F5DC] px-3 py-2"
+                >
                   <p className="font-medium">{conference.name}</p>
                   <p className="text-[#816040]">
                     {conference.city} · {formatDate(conference.startDate)}
@@ -312,7 +349,7 @@ const AdminView = observer(() => {
         </div>
 
         <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
-          <h3 className="text-base font-semibold">Представители секций</h3>
+          <h3 className="text-base font-semibold">Председатели секций</h3>
           {conferenceStore.sectionRepresentatives.length ? (
             <ul className="mt-3 space-y-2 text-sm">
               {conferenceStore.sectionRepresentatives.map((representative) => {
@@ -320,7 +357,10 @@ const AdminView = observer(() => {
                   representative.conferenceId,
                 );
                 return (
-                  <li key={representative.id} className="rounded-xl bg-[#F5F5DC] px-3 py-2">
+                  <li
+                    key={representative.id}
+                    className="rounded-xl bg-[#F5F5DC] px-3 py-2"
+                  >
                     <p className="font-medium">{representative.sectionName}</p>
                     <p className="text-[#816040]">
                       {representative.representativeName} ·{" "}

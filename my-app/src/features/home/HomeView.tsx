@@ -34,7 +34,7 @@ const roleCards = [
 ];
 
 const HomeView = observer(() => {
-  const { appStore, authStore, conferenceStore } = useStore();
+  const { authStore, conferenceStore } = useStore();
 
   return (
     <section className="space-y-8">
@@ -42,9 +42,6 @@ const HomeView = observer(() => {
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#816040]">
           Платформа управления конференцией
         </p>
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-          {appStore.appName}
-        </h1>
         <p className="max-w-2xl text-base text-[#6A4A2D]">
           Основной функционал разделён по ролям. Выберите нужный рабочий
           кабинет.
@@ -56,16 +53,19 @@ const HomeView = observer(() => {
         {authStore.user ? (
           <>
             <p className="mt-2 text-sm text-[#6A4A2D]">
-              Вы вошли как {authStore.user.fullName}. Роль:{" "}
-              {roleLabels[authStore.user.role]}.
+              Вы вошли как {authStore.user.fullName}. Доступные роли:{" "}
+              {authStore.user.roles.map((role) => roleLabels[role]).join(", ")}.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
-              <Link
-                href={roleHomePaths[authStore.user.role]}
-                className="inline-flex rounded-full bg-[#734222] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#8A4F29]"
-              >
-                Открыть мой кабинет
-              </Link>
+              {authStore.user.roles.map((role) => (
+                <Link
+                  key={role}
+                  href={roleHomePaths[role]}
+                  className="inline-flex rounded-full bg-[#734222] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#8A4F29]"
+                >
+                  {roleLabels[role]}
+                </Link>
+              ))}
             </div>
           </>
         ) : (

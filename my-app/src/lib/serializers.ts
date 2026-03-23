@@ -7,7 +7,13 @@ import type {
   ReviewerAssignment,
   SectionRepresentative,
 } from "@/types/domain";
-import { dbRoleToAppRole, normalizeEmail, type DbRole } from "@/lib/roles";
+import {
+  dbRoleToAppRole,
+  dbRolesToAppRoles,
+  normalizeEmail,
+  resolveDbRoles,
+  type DbRole,
+} from "@/lib/roles";
 
 type SerializableDate = Date | string;
 
@@ -22,13 +28,17 @@ export function serializeUser(user: {
   fullName: string;
   email: string;
   role: DbRole;
+  roles?: DbRole[];
   createdAt: Date;
 }): AuthUser {
+  const roles = dbRolesToAppRoles(resolveDbRoles(user));
+
   return {
     id: user.id,
     fullName: user.fullName,
     email: normalizeEmail(user.email),
-    role: dbRoleToAppRole(user.role),
+    role: roles[0] ?? dbRoleToAppRole(user.role),
+    roles,
     createdAt: user.createdAt.toISOString(),
   };
 }
@@ -54,13 +64,20 @@ export function serializeParticipantRegistration(registration: {
   conferenceId: string;
   createdAt: SerializableDate;
   user: {
+    id: string;
     fullName: string;
     email: string;
+    role: DbRole;
+    roles?: DbRole[];
   };
 }): ParticipantRegistration {
+  const userRoles = dbRolesToAppRoles(resolveDbRoles(registration.user));
+
   return {
     id: registration.id,
     conferenceId: registration.conferenceId,
+    userId: registration.user.id,
+    userRoles,
     participantName: registration.user.fullName,
     participantEmail: normalizeEmail(registration.user.email),
     createdAt: toIsoString(registration.createdAt),
@@ -99,6 +116,7 @@ export function serializeArticle(article: {
 export function serializeReviewerAssignment(assignment: {
   id: string;
   articleId: string;
+  reviewerUserId: string | null;
   reviewerName: string;
   reviewerEmail: string;
   assignedBy: string;
@@ -107,6 +125,7 @@ export function serializeReviewerAssignment(assignment: {
   return {
     id: assignment.id,
     articleId: assignment.articleId,
+    reviewerUserId: assignment.reviewerUserId,
     reviewerName: assignment.reviewerName,
     reviewerEmail: normalizeEmail(assignment.reviewerEmail),
     assignedBy: assignment.assignedBy,
@@ -140,6 +159,7 @@ export function serializeSectionRepresentative(representative: {
   id: string;
   conferenceId: string;
   sectionName: string;
+  representativeUserId: string | null;
   representativeName: string;
   representativeEmail: string;
   createdAt: SerializableDate;
@@ -148,6 +168,7 @@ export function serializeSectionRepresentative(representative: {
     id: representative.id,
     conferenceId: representative.conferenceId,
     sectionName: representative.sectionName,
+    representativeUserId: representative.representativeUserId,
     representativeName: representative.representativeName,
     representativeEmail: normalizeEmail(representative.representativeEmail),
     createdAt: toIsoString(representative.createdAt),

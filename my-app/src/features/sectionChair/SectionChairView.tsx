@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type FormEvent, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useStore } from "@/app/providers/StoreProvider";
+import { userHasRole } from "@/lib/client-auth";
 
 type Notice = {
   type: "success" | "error";
@@ -21,23 +22,25 @@ const SectionChairView = observer(() => {
   const { authStore, conferenceStore } = useStore();
   const [notice, setNotice] = useState<Notice>(null);
   const [form, setForm] = useState({
-    articleId: "",
-    reviewerName: "",
-    reviewerEmail: "",
+    articleIds: [] as string[],
+    reviewerUserId: "",
   });
 
   const managedSectionKeys = new Set(
     conferenceStore.sectionRepresentatives
       .filter(
         (representative) =>
+          representative.representativeUserId === authStore.user?.id ||
           representative.representativeEmail.toLowerCase() ===
-          authStore.user?.email.toLowerCase(),
+            authStore.user?.email.toLowerCase(),
       )
       .map(
         (representative) =>
           `${representative.conferenceId}::${representative.sectionName}`,
       ),
   );
+  const canAccessAsChair =
+    userHasRole(authStore.user, "section-chair") || managedSectionKeys.size > 0;
 
   const visibleArticles = conferenceStore.articles.filter((article) =>
     managedSectionKeys.has(`${article.conferenceId}::${article.sectionName}`),
@@ -56,15 +59,67 @@ const SectionChairView = observer(() => {
     },
   );
 
+  const selectedArticles = visibleArticles.filter((article) =>
+    form.articleIds.includes(article.id),
+  );
+  const selectedConferenceIds = Array.from(
+    new Set(selectedArticles.map((article) => article.conferenceId)),
+  );
+  const reviewerConferenceMap = new Map<
+    string,
+    {
+      registration: (typeof conferenceStore.participantRegistrations)[number];
+      conferenceIds: Set<string>;
+    }
+  >();
+
+  selectedConferenceIds.forEach((conferenceId) => {
+    conferenceStore
+      .getRegistrationsForConference(conferenceId)
+      .forEach((registration) => {
+        const existingReviewer = reviewerConferenceMap.get(registration.userId);
+        if (existingReviewer) {
+          existingReviewer.conferenceIds.add(conferenceId);
+          return;
+        }
+
+        reviewerConferenceMap.set(registration.userId, {
+          registration,
+          conferenceIds: new Set([conferenceId]),
+        });
+      });
+  });
+
+  const availableReviewers = Array.from(reviewerConferenceMap.values())
+    .filter(
+      (candidate) =>
+        candidate.conferenceIds.size === selectedConferenceIds.length,
+    )
+    .map((candidate) => candidate.registration);
+
+  function toggleArticle(articleId: string) {
+    setForm((prev) => {
+      const hasArticle = prev.articleIds.includes(articleId);
+      return {
+        articleIds: hasArticle
+          ? prev.articleIds.filter((id) => id !== articleId)
+          : [...prev.articleIds, articleId],
+        reviewerUserId: "",
+      };
+    });
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
       await conferenceStore.assignReviewer(form);
-      setNotice({ type: "success", text: "Рецензент назначен на статью." });
+      setNotice({
+        type: "success",
+        text: "Рецензент назначен на выбранные статьи.",
+      });
       setForm({
-        articleId: "",
-        reviewerName: "",
-        reviewerEmail: "",
+        articleIds: [],
+        reviewerUserId: "",
       });
     } catch (error) {
       setNotice({
@@ -99,14 +154,15 @@ const SectionChairView = observer(() => {
     );
   }
 
-  if (authStore.user.role !== "section-chair") {
+  if (!canAccessAsChair) {
     return (
       <section className="space-y-4">
         <h1 className="text-3xl font-semibold tracking-tight">
           Страница председателя секции
         </h1>
         <p className="text-[#6A4A2D]">
-          Эта страница доступна только для роли председателя секции.
+          Эта страница доступна пользователю, которого администратор назначил
+          председателем секции.
         </p>
       </section>
     );
@@ -121,6 +177,11 @@ const SectionChairView = observer(() => {
         <p className="text-[#6A4A2D]">
           Председатель назначает рецензентов только на статьи своей секции.
         </p>
+        {!managedSectionKeys.size ? (
+          <p className="rounded-xl bg-[#F5F5DC] px-4 py-3 text-sm text-[#6A4A2D]">
+            Администратор пока не закрепил за вами секцию на конференции.
+          </p>
+        ) : null}
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
@@ -134,54 +195,72 @@ const SectionChairView = observer(() => {
             {authStore.user.fullName} · {authStore.user.email}
           </div>
 
+          <div className="space-y-1">
+            <span className="text-sm text-[#6A4A2D]">Статьи</span>
+            <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-[#C7B288] px-3 py-3 text-sm">
+              {visibleArticles.map((article) => (
+                <label
+                  key={article.id}
+                  className="flex items-start gap-3 rounded-xl bg-[#F5F5DC] px-3 py-2 text-[#5D4128]"
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 accent-[#734222]"
+                    checked={form.articleIds.includes(article.id)}
+                    onChange={() => toggleArticle(article.id)}
+                  />
+                  <span className="space-y-1">
+                    <span className="block font-medium">{article.title}</span>
+                    <span className="block text-xs text-[#816040]">
+                      {article.sectionName} ·{" "}
+                      {conferenceStore.getConferenceById(article.conferenceId)
+                        ?.name ?? "Конференция"}
+                    </span>
+                  </span>
+                </label>
+              ))}
+              {!visibleArticles.length ? (
+                <p className="text-sm text-[#816040]">
+                  На ваши секции пока не подано статей.
+                </p>
+              ) : null}
+            </div>
+          </div>
+
           <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Статья</span>
+            <span className="text-sm text-[#6A4A2D]">Рецензент</span>
             <select
               className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-              value={form.articleId}
+              value={form.reviewerUserId}
               onChange={(event) =>
-                setForm((prev) => ({ ...prev, articleId: event.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  reviewerUserId: event.target.value,
+                }))
               }
             >
-              <option value="">Выберите статью</option>
-              {visibleArticles.map((article) => (
-                <option key={article.id} value={article.id}>
-                  {article.title}
+              <option value="">Выберите рецензента</option>
+              {availableReviewers.map((registration) => (
+                <option key={registration.userId} value={registration.userId}>
+                  {registration.participantName} ·{" "}
+                  {registration.participantEmail}
                 </option>
               ))}
             </select>
           </label>
 
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Имя рецензента</span>
-            <input
-              className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-              value={form.reviewerName}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  reviewerName: event.target.value,
-                }))
-              }
-              placeholder="Мария Петрова"
-            />
-          </label>
+          {selectedArticles.length ? (
+            <p className="text-sm text-[#816040]">
+              Выбрано статей: {selectedArticles.length}
+            </p>
+          ) : null}
 
-          <label className="block space-y-1">
-            <span className="text-sm text-[#6A4A2D]">Email рецензента</span>
-            <input
-              className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-              type="email"
-              value={form.reviewerEmail}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  reviewerEmail: event.target.value,
-                }))
-              }
-              placeholder="reviewer@example.com"
-            />
-          </label>
+          {selectedArticles.length && !availableReviewers.length ? (
+            <p className="text-sm text-[#816040]">
+              Нет пользователей, зарегистрированных на всех выбранных
+              конференциях.
+            </p>
+          ) : null}
 
           {notice ? (
             <p
@@ -198,6 +277,7 @@ const SectionChairView = observer(() => {
           <button
             className="rounded-full bg-[#734222] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#8A4F29]"
             type="submit"
+            disabled={!form.articleIds.length || !form.reviewerUserId}
           >
             Назначить
           </button>
@@ -230,8 +310,7 @@ const SectionChairView = observer(() => {
               </ul>
             ) : (
               <p className="mt-3 text-sm text-[#816040]">
-                На ваши секции пока не назначено статей или администратор ещё не
-                закрепил за вами секцию.
+                На ваши секции пока не подано статей.
               </p>
             )}
           </div>

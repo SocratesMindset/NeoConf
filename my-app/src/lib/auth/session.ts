@@ -3,7 +3,7 @@ import type { NextRequest, NextResponse } from "next/server";
 import { ApiError } from "@/lib/api";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
-import type { DbRole } from "@/lib/roles";
+import { resolveDbRoles, type DbRole } from "@/lib/roles";
 
 const SESSION_COOKIE_NAME = "neoconf_session";
 
@@ -112,7 +112,12 @@ export async function requireUser(
     throw new ApiError(401, "Требуется авторизация.");
   }
 
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
+  const userRoles = resolveDbRoles(user);
+
+  if (
+    allowedRoles &&
+    !allowedRoles.some((allowedRole) => userRoles.includes(allowedRole))
+  ) {
     throw new ApiError(403, "Недостаточно прав для выполнения действия.");
   }
 

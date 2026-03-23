@@ -5,7 +5,7 @@ export const registerSchema = z
   .object({
     fullName: z.string().trim().min(1, "Укажите ФИО."),
     email: z.email("Укажите корректный email."),
-    role: z.enum(APP_ROLES, { message: "Выберите роль." }),
+    roles: z.array(z.enum(APP_ROLES)).min(1, "Выберите хотя бы одну роль."),
     password: z.string().min(6, "Пароль должен содержать минимум 6 символов."),
     confirmPassword: z.string().min(1, "Повторите пароль."),
     agreeWithPolicy: z
@@ -31,11 +31,10 @@ export const createConferenceSchema = z.object({
 export const sectionRepresentativeSchema = z.object({
   conferenceId: z.string().trim().min(1, "Выберите конференцию."),
   sectionName: z.string().trim().min(1, "Название секции обязательно."),
-  representativeName: z
+  representativeUserId: z
     .string()
     .trim()
-    .min(1, "Имя представителя обязательно."),
-  representativeEmail: z.email("Укажите корректный email представителя."),
+    .min(1, "Выберите председателя секции."),
 });
 
 export const participantRegistrationSchema = z.object({
@@ -43,9 +42,10 @@ export const participantRegistrationSchema = z.object({
 });
 
 export const reviewerAssignmentSchema = z.object({
-  articleId: z.string().trim().min(1, "Выберите статью."),
-  reviewerName: z.string().trim().min(1, "Имя рецензента обязательно."),
-  reviewerEmail: z.email("Укажите корректный email рецензента."),
+  articleIds: z
+    .array(z.string().trim().min(1))
+    .min(1, "Выберите хотя бы одну статью."),
+  reviewerUserId: z.string().trim().min(1, "Выберите рецензента."),
 });
 
 export const reviewSchema = z.object({

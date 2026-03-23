@@ -25,8 +25,11 @@ export async function getAppState(): Promise<AppState> {
       include: {
         user: {
           select: {
+            id: true,
             fullName: true,
             email: true,
+            role: true,
+            roles: true,
           },
         },
       },

@@ -8,13 +8,16 @@ import { reviewSchema } from "@/lib/validators";
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireUser(request, ["REVIEWER"]);
+    const user = await requireUser(request);
     const payload = reviewSchema.parse(await request.json());
 
     const assignment = await prisma.reviewerAssignment.findFirst({
       where: {
         articleId: payload.articleId,
-        reviewerEmail: normalizeEmail(user.email),
+        OR: [
+          { reviewerUserId: user.id },
+          { reviewerEmail: normalizeEmail(user.email) },
+        ],
       },
     });
 

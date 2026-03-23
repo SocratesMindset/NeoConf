@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useStore } from "@/app/providers/StoreProvider";
-import { roleHomePaths } from "@/lib/client-auth";
+import { PasswordInput } from "@/components/forms/PasswordInput";
+import { getDefaultRoleHomePath } from "@/lib/client-auth";
 
 type Notice = {
   type: "success" | "error";
@@ -33,9 +34,9 @@ const LoginView = observer(() => {
 
       setNotice({
         type: "success",
-        text: "Авторизация успешна. Перенаправляем в рабочий кабинет.",
+        text: "Авторизация успешна. Перенаправляем в доступный кабинет.",
       });
-      router.push(roleHomePaths[user.role]);
+      router.push(getDefaultRoleHomePath(user.roles));
     } catch (error) {
       setNotice({
         type: "error",
@@ -83,14 +84,14 @@ const LoginView = observer(() => {
 
         <label className="block space-y-1">
           <span className="text-sm text-[#6A4A2D]">Пароль</span>
-          <input
+          <PasswordInput
             className="w-full rounded-xl border border-[#C7B288] bg-[#F5F5DC] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-            type="password"
             placeholder="••••••••"
             value={form.password}
             onChange={(event) =>
               setForm((prev) => ({ ...prev, password: event.target.value }))
             }
+            autoComplete="current-password"
           />
         </label>
 

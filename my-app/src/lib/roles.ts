@@ -13,6 +13,10 @@ export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+export function appRolesToDbRoles(roles: AppRole[]) {
+  return Array.from(new Set(roles.map(appRoleToDbRole)));
+}
+
 export function appRoleToDbRole(role: AppRole) {
   switch (role) {
     case "participant":
@@ -28,6 +32,10 @@ export function appRoleToDbRole(role: AppRole) {
   throw new Error(`Unsupported role: ${role satisfies never}`);
 }
 
+export function dbRolesToAppRoles(roles: DbRole[]) {
+  return Array.from(new Set(roles.map(dbRoleToAppRole)));
+}
+
 export function dbRoleToAppRole(role: DbRole): AppRole {
   switch (role) {
     case "PARTICIPANT":
@@ -41,4 +49,19 @@ export function dbRoleToAppRole(role: DbRole): AppRole {
   }
 
   throw new Error(`Unsupported role: ${role satisfies never}`);
+}
+
+export function resolveDbRoles(user: {
+  role?: DbRole;
+  roles?: DbRole[] | null;
+}) {
+  if (user.roles?.length) {
+    return Array.from(new Set(user.roles));
+  }
+
+  if (user.role) {
+    return [user.role];
+  }
+
+  return [];
 }

@@ -8,6 +8,7 @@
     "start": "next start",
     "start:prod": "./scripts/start-prod.sh",
     "lint": "eslint",
+    "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:db:push": "prisma db push",
     "prisma:seed": "node --env-file=.env prisma/seed.mjs"

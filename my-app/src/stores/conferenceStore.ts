@@ -18,9 +18,8 @@ interface CreateConferenceInput {
 }
 
 interface AssignReviewerInput {
-  articleId: string;
-  reviewerName: string;
-  reviewerEmail: string;
+  articleIds: string[];
+  reviewerUserId: string;
 }
 
 interface SubmitReviewInput {
@@ -32,8 +31,7 @@ interface SubmitReviewInput {
 interface AssignSectionRepresentativeInput {
   conferenceId: string;
   sectionName: string;
-  representativeName: string;
-  representativeEmail: string;
+  representativeUserId: string;
 }
 
 interface SubmitArticleInput {
@@ -109,6 +107,12 @@ export class ConferenceStore {
 
     return Array.from(
       new Set([...DEFAULT_SECTIONS, ...representativeSections]),
+    );
+  }
+
+  getRegistrationsForConference(conferenceId: string) {
+    return this.participantRegistrations.filter(
+      (registration) => registration.conferenceId === conferenceId,
     );
   }
 

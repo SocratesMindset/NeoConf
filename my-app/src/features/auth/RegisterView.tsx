@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useStore } from "@/app/providers/StoreProvider";
-import { roleHomePaths } from "@/lib/client-auth";
+import { PasswordInput } from "@/components/forms/PasswordInput";
+import { getDefaultRoleHomePath } from "@/lib/client-auth";
+import { roleOptions } from "@/lib/roles";
 import type { AppRole } from "@/types/domain";
 
 type Notice = {
@@ -13,25 +15,27 @@ type Notice = {
   text: string;
 } | null;
 
-const roleOptions = [
-  { value: "participant", label: "Участник" },
-  { value: "reviewer", label: "Рецензент" },
-  { value: "section-chair", label: "Председатель секции" },
-  { value: "admin", label: "Администратор" },
-] as const;
-
 const RegisterView = observer(() => {
   const router = useRouter();
   const { authStore } = useStore();
   const [form, setForm] = useState({
     fullName: "",
     email: "",
-    role: "participant" as AppRole,
+    roles: ["participant"] as AppRole[],
     password: "",
     confirmPassword: "",
     agreeWithPolicy: false,
   });
   const [notice, setNotice] = useState<Notice>(null);
+
+  function toggleRole(role: AppRole) {
+    setForm((prev) => ({
+      ...prev,
+      roles: prev.roles.includes(role)
+        ? prev.roles.filter((value) => value !== role)
+        : [...prev.roles, role],
+    }));
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -40,7 +44,7 @@ const RegisterView = observer(() => {
       const user = await authStore.register({
         fullName: form.fullName,
         email: form.email,
-        role: form.role,
+        roles: form.roles,
         password: form.password,
         confirmPassword: form.confirmPassword,
         agreeWithPolicy: form.agreeWithPolicy,
@@ -48,9 +52,9 @@ const RegisterView = observer(() => {
 
       setNotice({
         type: "success",
-        text: "Аккаунт создан. Перенаправляем в рабочий кабинет.",
+        text: "Аккаунт создан. Перенаправляем в доступный кабинет.",
       });
-      router.push(roleHomePaths[user.role]);
+      router.push(getDefaultRoleHomePath(user.roles));
     } catch (error) {
       setNotice({
         type: "error",
@@ -109,45 +113,43 @@ const RegisterView = observer(() => {
           />
         </label>
 
-        <label className="block space-y-1">
-          <span className="text-sm text-[#6A4A2D]">Роль</span>
-          <select
-            className="w-full rounded-xl border border-[#C7B288] bg-[#F5F5DC] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-            value={form.role}
-            onChange={(event) =>
-              setForm((prev) => ({
-                ...prev,
-                role: event.target
-                  .value as (typeof roleOptions)[number]["value"],
-              }))
-            }
-          >
+        <fieldset className="space-y-2">
+          <legend className="text-sm text-[#6A4A2D]">Роли</legend>
+          <div className="grid gap-2 sm:grid-cols-2">
             {roleOptions.map((role) => (
-              <option key={role.value} value={role.value}>
-                {role.label}
-              </option>
+              <label
+                key={role.value}
+                className="flex items-start gap-2 rounded-xl border border-[#C7B288] bg-[#F5F5DC] px-3 py-2 text-sm text-[#5D4128]"
+              >
+                <input
+                  className="mt-0.5 h-4 w-4 accent-[#734222]"
+                  type="checkbox"
+                  checked={form.roles.includes(role.value)}
+                  onChange={() => toggleRole(role.value)}
+                />
+                <span>{role.label}</span>
+              </label>
             ))}
-          </select>
-        </label>
+          </div>
+        </fieldset>
 
         <label className="block space-y-1">
           <span className="text-sm text-[#6A4A2D]">Пароль</span>
-          <input
+          <PasswordInput
             className="w-full rounded-xl border border-[#C7B288] bg-[#F5F5DC] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-            type="password"
             value={form.password}
             onChange={(event) =>
               setForm((prev) => ({ ...prev, password: event.target.value }))
             }
             placeholder="Минимум 6 символов"
+            autoComplete="new-password"
           />
         </label>
 
         <label className="block space-y-1">
           <span className="text-sm text-[#6A4A2D]">Повторите пароль</span>
-          <input
+          <PasswordInput
             className="w-full rounded-xl border border-[#C7B288] bg-[#F5F5DC] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
-            type="password"
             value={form.confirmPassword}
             onChange={(event) =>
               setForm((prev) => ({
@@ -156,6 +158,7 @@ const RegisterView = observer(() => {
               }))
             }
             placeholder="Введите пароль повторно"
+            autoComplete="new-password"
           />
         </label>
 
