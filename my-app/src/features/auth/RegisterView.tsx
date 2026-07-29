@@ -7,7 +7,7 @@ import { observer } from "mobx-react-lite";
 import { useStore } from "@/app/providers/StoreProvider";
 import { PasswordInput } from "@/components/forms/PasswordInput";
 import { getDefaultRoleHomePath } from "@/lib/client-auth";
-import { roleOptions } from "@/lib/roles";
+import { selfRegisterableRoleOptions } from "@/lib/roles";
 import type { AppRole } from "@/types/domain";
 
 type Notice = {
@@ -116,7 +116,7 @@ const RegisterView = observer(() => {
         <fieldset className="space-y-2">
           <legend className="text-sm text-[#6A4A2D]">Роли</legend>
           <div className="grid gap-2 sm:grid-cols-2">
-            {roleOptions.map((role) => (
+            {selfRegisterableRoleOptions.map((role) => (
               <label
                 key={role.value}
                 className="flex items-start gap-2 rounded-xl border border-[#C7B288] bg-[#F5F5DC] px-3 py-2 text-sm text-[#5D4128]"

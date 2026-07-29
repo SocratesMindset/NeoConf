@@ -12,6 +12,7 @@ enum UserRole {
   REVIEWER
   SECTION_CHAIR
   ADMIN
+  SUPERADMIN
 }
 
 model User {

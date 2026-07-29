@@ -1,13 +1,25 @@
-import type { AppRole } from "@/types/domain";
+import { SELF_REGISTERABLE_ROLES, type AppRole } from "@/types/domain";
 
-export type DbRole = "PARTICIPANT" | "REVIEWER" | "SECTION_CHAIR" | "ADMIN";
+export type DbRole =
+  | "PARTICIPANT"
+  | "REVIEWER"
+  | "SECTION_CHAIR"
+  | "ADMIN"
+  | "SUPERADMIN";
 
 export const roleOptions: { value: AppRole; label: string }[] = [
   { value: "participant", label: "Участник" },
   { value: "reviewer", label: "Рецензент" },
   { value: "section-chair", label: "Председатель секции" },
   { value: "admin", label: "Администратор" },
+  { value: "superadmin", label: "Суперадминистратор" },
 ];
+
+// Roles selectable on the public registration form — excludes "superadmin",
+// which can only be granted by an existing superadmin.
+export const selfRegisterableRoleOptions = roleOptions.filter((option) =>
+  (SELF_REGISTERABLE_ROLES as readonly AppRole[]).includes(option.value),
+);
 
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -27,6 +39,8 @@ export function appRoleToDbRole(role: AppRole) {
       return "SECTION_CHAIR";
     case "admin":
       return "ADMIN";
+    case "superadmin":
+      return "SUPERADMIN";
   }
 
   throw new Error(`Unsupported role: ${role satisfies never}`);
@@ -46,6 +60,8 @@ export function dbRoleToAppRole(role: DbRole): AppRole {
       return "section-chair";
     case "ADMIN":
       return "admin";
+    case "SUPERADMIN":
+      return "superadmin";
   }
 
   throw new Error(`Unsupported role: ${role satisfies never}`);

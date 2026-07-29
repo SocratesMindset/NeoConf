@@ -3,9 +3,17 @@ export const APP_ROLES = [
   "reviewer",
   "section-chair",
   "admin",
+  "superadmin",
 ] as const;
 
 export type AppRole = (typeof APP_ROLES)[number];
+
+// Roles a user is allowed to pick for themselves at /api/auth/register.
+// "superadmin" is intentionally excluded — it can only be granted by an
+// existing superadmin via /api/admin/users/[userId]/roles.
+export const SELF_REGISTERABLE_ROLES = APP_ROLES.filter(
+  (role) => role !== "superadmin",
+);
 
 export interface AuthUser {
   id: string;

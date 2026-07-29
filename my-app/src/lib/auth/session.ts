@@ -114,8 +114,13 @@ export async function requireUser(
 
   const userRoles = resolveDbRoles(user);
 
+  // Superadmin can act as any role — it's the only role management can grant
+  // itself full access to without being explicitly listed everywhere.
+  const isSuperAdmin = userRoles.includes("SUPERADMIN");
+
   if (
     allowedRoles &&
+    !isSuperAdmin &&
     !allowedRoles.some((allowedRole) => userRoles.includes(allowedRole))
   ) {
     throw new ApiError(403, "Недостаточно прав для выполнения действия.");

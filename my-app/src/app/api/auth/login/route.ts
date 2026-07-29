@@ -4,12 +4,20 @@ import { ApiError, handleApiError } from "@/lib/api";
 import { createSession, setSessionCookie } from "@/lib/auth/session";
 import { verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
+import { enforceRateLimit, getClientIp } from "@/lib/rate-limit";
 import { normalizeEmail } from "@/lib/roles";
 import { serializeUser } from "@/lib/serializers";
 import { loginSchema } from "@/lib/validators";
 
 export async function POST(request: NextRequest) {
   try {
+    enforceRateLimit(
+      `login:${getClientIp(request)}`,
+      10,
+      5 * 60 * 1000,
+      "Слишком много попыток входа. Попробуйте позже.",
+    );
+
     const payload = loginSchema.parse(await request.json());
     const email = normalizeEmail(payload.email);
     const user = await prisma.user.findUnique({

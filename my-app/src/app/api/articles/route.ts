@@ -3,6 +3,7 @@ import { ApiError, handleApiError, jsonResponse } from "@/lib/api";
 import { requireUser } from "@/lib/auth/session";
 import { deleteStoredFile, saveArticleFile } from "@/lib/files";
 import { prisma } from "@/lib/prisma";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { serializeArticle } from "@/lib/serializers";
 
 export async function POST(request: NextRequest) {
@@ -10,6 +11,14 @@ export async function POST(request: NextRequest) {
 
   try {
     const user = await requireUser(request, ["PARTICIPANT"]);
+
+    enforceRateLimit(
+      `article-upload:${user.id}`,
+      10,
+      60 * 60 * 1000,
+      "Слишком много загрузок статей. Попробуйте позже.",
+    );
+
     const formData = await request.formData();
     const conferenceId = String(formData.get("conferenceId") ?? "").trim();
     const sectionName = String(formData.get("sectionName") ?? "").trim();

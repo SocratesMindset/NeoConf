@@ -1,11 +1,13 @@
 import { z } from "zod";
-import { APP_ROLES } from "@/types/domain";
+import { APP_ROLES, SELF_REGISTERABLE_ROLES } from "@/types/domain";
 
 export const registerSchema = z
   .object({
     fullName: z.string().trim().min(1, "Укажите ФИО."),
     email: z.email("Укажите корректный email."),
-    roles: z.array(z.enum(APP_ROLES)).min(1, "Выберите хотя бы одну роль."),
+    roles: z
+      .array(z.enum(SELF_REGISTERABLE_ROLES))
+      .min(1, "Выберите хотя бы одну роль."),
     password: z.string().min(6, "Пароль должен содержать минимум 6 символов."),
     confirmPassword: z.string().min(1, "Повторите пароль."),
     agreeWithPolicy: z
@@ -56,4 +58,8 @@ export const reviewSchema = z.object({
     .min(1, "Оценка должна быть от 1 до 10.")
     .max(10, "Оценка должна быть от 1 до 10."),
   comment: z.string().trim().min(1, "Комментарий обязателен."),
+});
+
+export const updateUserRolesSchema = z.object({
+  roles: z.array(z.enum(APP_ROLES)).min(1, "Выберите хотя бы одну роль."),
 });

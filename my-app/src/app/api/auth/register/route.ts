@@ -4,12 +4,20 @@ import { ApiError, handleApiError } from "@/lib/api";
 import { createSession, setSessionCookie } from "@/lib/auth/session";
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
+import { enforceRateLimit, getClientIp } from "@/lib/rate-limit";
 import { appRolesToDbRoles, normalizeEmail } from "@/lib/roles";
 import { serializeUser } from "@/lib/serializers";
 import { registerSchema } from "@/lib/validators";
 
 export async function POST(request: NextRequest) {
   try {
+    enforceRateLimit(
+      `register:${getClientIp(request)}`,
+      5,
+      60 * 60 * 1000,
+      "Слишком много регистраций с вашего адреса. Попробуйте позже.",
+    );
+
     const payload = registerSchema.parse(await request.json());
     const email = normalizeEmail(payload.email);
     const roles = appRolesToDbRoles(payload.roles);

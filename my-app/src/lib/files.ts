@@ -5,6 +5,7 @@ import { ApiError } from "@/lib/api";
 import { env } from "@/lib/env";
 
 const ALLOWED_EXTENSIONS = new Set([".pdf", ".doc", ".docx"]);
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
 function getUploadRoot() {
   return path.join(process.cwd(), env.UPLOAD_DIR);
@@ -25,9 +26,17 @@ export async function saveArticleFile(file: File) {
     throw new ApiError(400, "Допустимы только файлы PDF, DOC и DOCX.");
   }
 
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    throw new ApiError(400, "Размер файла не должен превышать 10 МБ.");
+  }
+
   const buffer = Buffer.from(await file.arrayBuffer());
   if (!buffer.length) {
     throw new ApiError(400, "Нельзя загрузить пустой файл.");
+  }
+
+  if (buffer.length > MAX_FILE_SIZE_BYTES) {
+    throw new ApiError(400, "Размер файла не должен превышать 10 МБ.");
   }
 
   await ensureUploadRoot();

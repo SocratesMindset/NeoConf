@@ -5,6 +5,9 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useStore } from "@/app/providers/StoreProvider";
 import { userHasRole } from "@/lib/client-auth";
+import { roleOptions } from "@/lib/roles";
+import { apiRequest } from "@/services/apiClient";
+import type { AppRole, AuthUser } from "@/types/domain";
 
 type Notice = {
   type: "success" | "error";
@@ -15,6 +18,153 @@ function formatDate(dateIso: string) {
   return new Date(dateIso).toLocaleString("ru-RU", {
     dateStyle: "medium",
   });
+}
+
+function extractErrorMessage(error: unknown, fallback: string) {
+  return typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+    ? error.message
+    : fallback;
+}
+
+function UserRolesEditor() {
+  const [users, setUsers] = useState<AuthUser[]>([]);
+  const [draftRoles, setDraftRoles] = useState<Record<string, AppRole[]>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    apiRequest<AuthUser[]>("/api/admin/users")
+      .then((data) => {
+        if (cancelled) return;
+        setUsers(data);
+        setDraftRoles(
+          Object.fromEntries(data.map((user) => [user.id, user.roles])),
+        );
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setLoadError(
+          extractErrorMessage(error, "Не удалось загрузить пользователей."),
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function toggleDraftRole(userId: string, role: AppRole) {
+    setDraftRoles((prev) => {
+      const current = prev[userId] ?? [];
+      const next = current.includes(role)
+        ? current.filter((value) => value !== role)
+        : [...current, role];
+      return { ...prev, [userId]: next };
+    });
+  }
+
+  async function handleSave(userId: string) {
+    setSavingUserId(userId);
+    setNotice(null);
+
+    try {
+      const roles = draftRoles[userId] ?? [];
+      const updated = await apiRequest<AuthUser>(
+        `/api/admin/users/${userId}/roles`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ roles }),
+        },
+      );
+      setUsers((prev) =>
+        prev.map((user) => (user.id === userId ? updated : user)),
+      );
+      setNotice({
+        type: "success",
+        text: `Роли для ${updated.fullName} обновлены.`,
+      });
+    } catch (error) {
+      setNotice({
+        type: "error",
+        text: extractErrorMessage(error, "Не удалось обновить роли."),
+      });
+    } finally {
+      setSavingUserId(null);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
+      <h2 className="text-lg font-semibold">Управление пользователями</h2>
+      <p className="mt-1 text-sm text-[#6A4A2D]">
+        Доступно только суперадминистратору: назначение и снятие ролей, вплоть
+        до понижения администратора до участника.
+      </p>
+
+      {notice ? (
+        <p
+          className={
+            notice.type === "success"
+              ? "mt-3 text-sm text-emerald-700"
+              : "mt-3 text-sm text-red-700"
+          }
+        >
+          {notice.text}
+        </p>
+      ) : null}
+
+      {isLoading ? (
+        <p className="mt-3 text-sm text-[#816040]">Загрузка...</p>
+      ) : loadError ? (
+        <p className="mt-3 text-sm text-red-700">{loadError}</p>
+      ) : (
+        <ul className="mt-4 space-y-3">
+          {users.map((user) => (
+            <li key={user.id} className="rounded-xl bg-[#F5F5DC] p-4">
+              <p className="font-medium">{user.fullName}</p>
+              <p className="text-sm text-[#816040]">{user.email}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {roleOptions.map((option) => (
+                  <label
+                    key={option.value}
+                    className="flex items-center gap-1.5 rounded-full border border-[#C7B288] bg-white px-3 py-1 text-xs text-[#5D4128]"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 accent-[#734222]"
+                      checked={(draftRoles[user.id] ?? []).includes(
+                        option.value,
+                      )}
+                      onChange={() => toggleDraftRole(user.id, option.value)}
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="mt-3 rounded-full bg-[#734222] px-4 py-1.5 text-xs font-medium text-white transition hover:bg-[#8A4F29] disabled:opacity-60"
+                disabled={savingUserId === user.id}
+                onClick={() => void handleSave(user.id)}
+              >
+                {savingUserId === user.id ? "Сохранение..." : "Сохранить роли"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 const AdminView = observer(() => {
@@ -378,6 +528,8 @@ const AdminView = observer(() => {
           )}
         </div>
       </div>
+
+      {userHasRole(authStore.user, "superadmin") ? <UserRolesEditor /> : null}
     </section>
   );
 });

@@ -27,6 +27,10 @@ services:
         value: storage/uploads/articles
       - key: SESSION_TTL_DAYS
         value: "7"
+      - key: SUPERADMIN_EMAIL
+        sync: false
+      - key: SUPERADMIN_PASSWORD
+        sync: false
     disk:
       name: storage
       mountPath: /opt/render/project/src/storage
