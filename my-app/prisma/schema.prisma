@@ -54,6 +54,18 @@ model Conference {
   registrations         ConferenceRegistration[]
   articles              Article[]
   sectionRepresentatives SectionRepresentative[]
+  sections              Section[]
+}
+
+model Section {
+  id           String     @id @default(cuid())
+  name         String
+  createdAt    DateTime   @default(now())
+  conferenceId String
+  conference   Conference @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+
+  @@unique([conferenceId, name])
+  @@index([conferenceId])
 }
 
 model ConferenceRegistration {
@@ -136,7 +148,8 @@ model SectionRepresentative {
   conference          Conference @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
   representativeUser  User?      @relation("SectionRepresentativeUser", fields: [representativeUserId], references: [id], onDelete: SetNull)
 
-  @@unique([conferenceId, sectionName])
+  @@unique([conferenceId, sectionName, representativeEmail], map: "SectionRepresentative_conf_section_email_key")
+  @@unique([conferenceId, sectionName, representativeUserId], map: "SectionRepresentative_conf_section_user_key")
   @@index([conferenceId])
   @@index([representativeEmail])
   @@index([representativeUserId])

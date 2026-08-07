@@ -15,8 +15,6 @@ export const roleOptions: { value: AppRole; label: string }[] = [
   { value: "superadmin", label: "Суперадминистратор" },
 ];
 
-// Roles selectable on the public registration form — excludes "superadmin",
-// which can only be granted by an existing superadmin.
 export const selfRegisterableRoleOptions = roleOptions.filter((option) =>
   (SELF_REGISTERABLE_ROLES as readonly AppRole[]).includes(option.value),
 );

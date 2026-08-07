@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useStore } from "@/app/providers/StoreProvider";
 import { userHasRole } from "@/lib/client-auth";
+import { apiRequest } from "@/services/apiClient";
+import type { AuthUser } from "@/types/domain";
 
 type Notice = {
   type: "success" | "error";
@@ -42,6 +44,13 @@ const SectionChairView = observer(() => {
   const canAccessAsChair =
     userHasRole(authStore.user, "section-chair") || managedSectionKeys.size > 0;
 
+  const mySectionRepresentations = conferenceStore.sectionRepresentatives.filter(
+    (representative) =>
+      representative.representativeUserId === authStore.user?.id ||
+      representative.representativeEmail.toLowerCase() ===
+        authStore.user?.email.toLowerCase(),
+  );
+
   const visibleArticles = conferenceStore.articles.filter((article) =>
     managedSectionKeys.has(`${article.conferenceId}::${article.sectionName}`),
   );
@@ -62,40 +71,26 @@ const SectionChairView = observer(() => {
   const selectedArticles = visibleArticles.filter((article) =>
     form.articleIds.includes(article.id),
   );
-  const selectedConferenceIds = Array.from(
-    new Set(selectedArticles.map((article) => article.conferenceId)),
+
+  const [availableReviewers, setAvailableReviewers] = useState<AuthUser[]>(
+    [],
   );
-  const reviewerConferenceMap = new Map<
-    string,
-    {
-      registration: (typeof conferenceStore.participantRegistrations)[number];
-      conferenceIds: Set<string>;
-    }
-  >();
 
-  selectedConferenceIds.forEach((conferenceId) => {
-    conferenceStore
-      .getRegistrationsForConference(conferenceId)
-      .forEach((registration) => {
-        const existingReviewer = reviewerConferenceMap.get(registration.userId);
-        if (existingReviewer) {
-          existingReviewer.conferenceIds.add(conferenceId);
-          return;
-        }
+  useEffect(() => {
+    let cancelled = false;
 
-        reviewerConferenceMap.set(registration.userId, {
-          registration,
-          conferenceIds: new Set([conferenceId]),
-        });
+    apiRequest<AuthUser[]>("/api/users?role=reviewer")
+      .then((data) => {
+        if (!cancelled) setAvailableReviewers(data);
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableReviewers([]);
       });
-  });
 
-  const availableReviewers = Array.from(reviewerConferenceMap.values())
-    .filter(
-      (candidate) =>
-        candidate.conferenceIds.size === selectedConferenceIds.length,
-    )
-    .map((candidate) => candidate.registration);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function toggleArticle(articleId: string) {
     setForm((prev) => {
@@ -240,10 +235,9 @@ const SectionChairView = observer(() => {
               }
             >
               <option value="">Выберите рецензента</option>
-              {availableReviewers.map((registration) => (
-                <option key={registration.userId} value={registration.userId}>
-                  {registration.participantName} ·{" "}
-                  {registration.participantEmail}
+              {availableReviewers.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.fullName} · {candidate.email}
                 </option>
               ))}
             </select>
@@ -255,10 +249,9 @@ const SectionChairView = observer(() => {
             </p>
           ) : null}
 
-          {selectedArticles.length && !availableReviewers.length ? (
+          {!availableReviewers.length ? (
             <p className="text-sm text-[#816040]">
-              Нет пользователей, зарегистрированных на всех выбранных
-              конференциях.
+              Пока нет ни одного пользователя с ролью рецензента.
             </p>
           ) : null}
 
@@ -284,6 +277,35 @@ const SectionChairView = observer(() => {
         </form>
 
         <div className="space-y-6">
+          {mySectionRepresentations.length ? (
+            <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
+              <h3 className="text-base font-semibold">
+                Скачать статьи секции
+              </h3>
+              <ul className="mt-3 space-y-2 text-sm">
+                {mySectionRepresentations.map((representative) => (
+                  <li
+                    key={representative.id}
+                    className="flex items-center justify-between gap-3 rounded-xl bg-[#F5F5DC] px-3 py-2"
+                  >
+                    <span className="text-[#5D4128]">
+                      {representative.sectionName} ·{" "}
+                      {conferenceStore.getConferenceById(
+                        representative.conferenceId,
+                      )?.name ?? "Конференция"}
+                    </span>
+                    <a
+                      href={`/api/articles/download-zip?conferenceId=${encodeURIComponent(representative.conferenceId)}&sectionName=${encodeURIComponent(representative.sectionName)}`}
+                      className="shrink-0 text-xs text-[#734222] underline"
+                    >
+                      Скачать zip
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
             <h3 className="text-base font-semibold">
               Поданные статьи моей секции

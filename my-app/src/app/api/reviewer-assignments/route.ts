@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { ApiError, handleApiError, jsonResponse } from "@/lib/api";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { normalizeEmail } from "@/lib/roles";
+import { normalizeEmail, resolveDbRoles } from "@/lib/roles";
 import { reviewerAssignmentSchema } from "@/lib/validators";
 
 export async function POST(request: NextRequest) {
@@ -59,40 +59,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const conferenceIds = Array.from(
-      new Set(articles.map((article) => article.conferenceId)),
-    );
-    const registrations = await prisma.conferenceRegistration.findMany({
-      where: {
-        userId: payload.reviewerUserId,
-        conferenceId: {
-          in: conferenceIds,
-        },
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            role: true,
-            roles: true,
-          },
-        },
+    const reviewer = await prisma.user.findUnique({
+      where: { id: payload.reviewerUserId },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        role: true,
+        roles: true,
       },
     });
 
-    if (registrations.length !== conferenceIds.length) {
-      throw new ApiError(
-        404,
-        "Рецензент должен быть зарегистрирован на всех выбранных конференциях.",
-      );
-    }
-
-    const reviewer = registrations[0]?.user;
-
     if (!reviewer) {
       throw new ApiError(404, "Выбранный рецензент не найден.");
+    }
+
+    if (!resolveDbRoles(reviewer).includes("REVIEWER")) {
+      throw new ApiError(
+        400,
+        "У выбранного пользователя нет роли рецензента.",
+      );
     }
 
     const existingAssignments = await prisma.reviewerAssignment.findMany({

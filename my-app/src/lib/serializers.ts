@@ -5,6 +5,7 @@ import type {
   ParticipantRegistration,
   Review,
   ReviewerAssignment,
+  Section,
   SectionRepresentative,
 } from "@/types/domain";
 import {
@@ -172,5 +173,19 @@ export function serializeSectionRepresentative(representative: {
     representativeName: representative.representativeName,
     representativeEmail: normalizeEmail(representative.representativeEmail),
     createdAt: toIsoString(representative.createdAt),
+  };
+}
+
+export function serializeSection(section: {
+  id: string;
+  conferenceId: string;
+  name: string;
+  createdAt: SerializableDate;
+}): Section {
+  return {
+    id: section.id,
+    conferenceId: section.conferenceId,
+    name: section.name,
+    createdAt: toIsoString(section.createdAt),
   };
 }

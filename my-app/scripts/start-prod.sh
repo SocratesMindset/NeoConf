@@ -3,4 +3,4 @@ set -euo pipefail
 
 ./node_modules/.bin/prisma db push
 node prisma/seed.mjs
-./node_modules/.bin/next start -p "${PORT:-3000}"
+./node_modules/.bin/next start -p "${PORT:-3000}" -H "${HOST:-127.0.0.1}"

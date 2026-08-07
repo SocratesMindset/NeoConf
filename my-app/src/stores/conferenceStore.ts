@@ -1,5 +1,4 @@
 import { makeAutoObservable, runInAction } from "mobx";
-import { DEFAULT_SECTIONS } from "@/lib/conference-sections";
 import { apiRequest } from "@/services/apiClient";
 import type {
   AppState,
@@ -8,6 +7,7 @@ import type {
   ParticipantRegistration,
   Review,
   ReviewerAssignment,
+  Section,
   SectionRepresentative,
 } from "@/types/domain";
 
@@ -42,6 +42,11 @@ interface SubmitArticleInput {
   file: File;
 }
 
+interface CreateSectionInput {
+  conferenceId: string;
+  name: string;
+}
+
 export class ConferenceStore {
   conferences: Conference[] = [];
   participantRegistrations: ParticipantRegistration[] = [];
@@ -49,6 +54,7 @@ export class ConferenceStore {
   reviewerAssignments: ReviewerAssignment[] = [];
   reviews: Review[] = [];
   sectionRepresentatives: SectionRepresentative[] = [];
+  sections: Section[] = [];
   isLoading = false;
   hasLoaded = false;
 
@@ -87,6 +93,7 @@ export class ConferenceStore {
     this.reviewerAssignments = state.reviewerAssignments;
     this.reviews = state.reviews;
     this.sectionRepresentatives = state.sectionRepresentatives;
+    this.sections = state.sections;
   }
 
   getConferenceById(conferenceId: string) {
@@ -100,20 +107,9 @@ export class ConferenceStore {
   }
 
   getSectionsForConference(conferenceId: string) {
-    const representativeSections = this.sectionRepresentatives
-      .filter((representative) => representative.conferenceId === conferenceId)
-      .map((representative) => representative.sectionName.trim())
-      .filter(Boolean);
-
-    return Array.from(
-      new Set([...DEFAULT_SECTIONS, ...representativeSections]),
-    );
-  }
-
-  getRegistrationsForConference(conferenceId: string) {
-    return this.participantRegistrations.filter(
-      (registration) => registration.conferenceId === conferenceId,
-    );
+    return this.sections
+      .filter((section) => section.conferenceId === conferenceId)
+      .map((section) => section.name);
   }
 
   async createConference(input: CreateConferenceInput) {
@@ -163,10 +159,32 @@ export class ConferenceStore {
     await this.loadState(true);
   }
 
+  async createSection(input: CreateSectionInput) {
+    await apiRequest("/api/sections", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    await this.loadState(true);
+  }
+
   async assignSectionRepresentative(input: AssignSectionRepresentativeInput) {
     await apiRequest("/api/section-representatives", {
       method: "POST",
       body: JSON.stringify(input),
+    });
+    await this.loadState(true);
+  }
+
+  async removeSectionRepresentative(representativeId: string) {
+    await apiRequest(`/api/section-representatives/${representativeId}`, {
+      method: "DELETE",
+    });
+    await this.loadState(true);
+  }
+
+  async deleteArticle(articleId: string) {
+    await apiRequest(`/api/articles/${articleId}`, {
+      method: "DELETE",
     });
     await this.loadState(true);
   }

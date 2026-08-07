@@ -37,6 +37,9 @@ const ReviewerView = observer(() => {
     : [];
   const canAccessAsReviewer =
     userHasRole(authStore.user, "reviewer") || visibleAssignments.length > 0;
+  const myReviews = conferenceStore.reviews.filter(
+    (review) => review.reviewerEmail.toLowerCase() === reviewerEmail,
+  );
   const selectedArticle = form.articleId
     ? conferenceStore.getArticleById(form.articleId)
     : null;
@@ -251,10 +254,10 @@ const ReviewerView = observer(() => {
           </div>
 
           <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
-            <h3 className="text-base font-semibold">Последние рецензии</h3>
-            {conferenceStore.reviews.length ? (
+            <h3 className="text-base font-semibold">Мои рецензии</h3>
+            {myReviews.length ? (
               <ul className="mt-3 space-y-2 text-sm">
-                {conferenceStore.reviews.slice(0, 6).map((review) => {
+                {myReviews.slice(0, 6).map((review) => {
                   const article = conferenceStore.getArticleById(
                     review.articleId,
                   );

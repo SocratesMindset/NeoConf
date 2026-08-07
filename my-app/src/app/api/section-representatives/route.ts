@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { ApiError, handleApiError, jsonResponse } from "@/lib/api";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { normalizeEmail } from "@/lib/roles";
+import { normalizeEmail, resolveDbRoles } from "@/lib/roles";
 import { serializeSectionRepresentative } from "@/lib/serializers";
 import { sectionRepresentativeSchema } from "@/lib/validators";
 
@@ -21,52 +21,51 @@ export async function POST(request: NextRequest) {
       throw new ApiError(404, "Выбранная конференция не найдена.");
     }
 
-    const registration = await prisma.conferenceRegistration.findUnique({
+    const section = await prisma.section.findUnique({
       where: {
-        conferenceId_userId: {
+        conferenceId_name: {
           conferenceId: payload.conferenceId,
-          userId: payload.representativeUserId,
-        },
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            role: true,
-            roles: true,
-          },
+          name: payload.sectionName.trim(),
         },
       },
     });
 
-    if (!registration) {
+    if (!section) {
       throw new ApiError(
-        404,
-        "Председатель секции должен быть зарегистрирован на выбранную конференцию.",
+        400,
+        "Такой секции нет на конференции. Сначала создайте секцию.",
       );
     }
 
-    const representative = await prisma.sectionRepresentative.upsert({
-      where: {
-        conferenceId_sectionName: {
-          conferenceId: payload.conferenceId,
-          sectionName: payload.sectionName.trim(),
-        },
+    const candidate = await prisma.user.findUnique({
+      where: { id: payload.representativeUserId },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        role: true,
+        roles: true,
       },
-      update: {
-        representativeUserId: registration.user.id,
-        representativeName: registration.user.fullName,
-        representativeEmail: normalizeEmail(registration.user.email),
-        createdAt: new Date(),
-      },
-      create: {
+    });
+
+    if (!candidate) {
+      throw new ApiError(404, "Выбранный пользователь не найден.");
+    }
+
+    if (!resolveDbRoles(candidate).includes("SECTION_CHAIR")) {
+      throw new ApiError(
+        400,
+        "У выбранного пользователя нет роли председателя секции.",
+      );
+    }
+
+    const representative = await prisma.sectionRepresentative.create({
+      data: {
         conferenceId: payload.conferenceId,
         sectionName: payload.sectionName.trim(),
-        representativeUserId: registration.user.id,
-        representativeName: registration.user.fullName,
-        representativeEmail: normalizeEmail(registration.user.email),
+        representativeUserId: candidate.id,
+        representativeName: candidate.fullName,
+        representativeEmail: normalizeEmail(candidate.email),
       },
     });
 
@@ -74,6 +73,20 @@ export async function POST(request: NextRequest) {
       status: 201,
     });
   } catch (error) {
+    const code =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "string"
+        ? error.code
+        : null;
+
+    if (code === "P2002") {
+      return handleApiError(
+        new ApiError(409, "Этот пользователь уже председатель этой секции."),
+      );
+    }
+
     return handleApiError(error);
   }
 }

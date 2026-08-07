@@ -37,6 +37,9 @@ const ParticipantView = observer(() => {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [registrationNotice, setRegistrationNotice] = useState<Notice>(null);
   const [articleNotice, setArticleNotice] = useState<Notice>(null);
+  const [deletingArticleId, setDeletingArticleId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     const defaultConferenceId = conferences[0]?.id ?? "";
@@ -61,10 +64,9 @@ const ParticipantView = observer(() => {
     registrationForm.conferenceId,
   ]);
 
-  const recentArticles = conferenceStore.articles.slice(0, 5);
-  const recentRegistrations = conferenceStore.participantRegistrations.slice(
-    0,
-    5,
+  const myRegistrations = conferenceStore.participantRegistrations.filter(
+    (registration) =>
+      registration.participantEmail.toLowerCase() === currentUserEmail,
   );
   const myArticles = conferenceStore.articles.filter(
     (article) => article.authorEmail.toLowerCase() === currentUserEmail,
@@ -145,6 +147,28 @@ const ParticipantView = observer(() => {
             ? error.message
             : "Не удалось загрузить статью.",
       });
+    }
+  }
+
+  async function handleDeleteArticle(articleId: string) {
+    setDeletingArticleId(articleId);
+    setArticleNotice(null);
+    try {
+      await conferenceStore.deleteArticle(articleId);
+      setArticleNotice({ type: "success", text: "Статья удалена." });
+    } catch (error) {
+      setArticleNotice({
+        type: "error",
+        text:
+          typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof error.message === "string"
+            ? error.message
+            : "Не удалось удалить статью.",
+      });
+    } finally {
+      setDeletingArticleId(null);
     }
   }
 
@@ -375,17 +399,18 @@ const ParticipantView = observer(() => {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
-          <h3 className="text-base font-semibold">Последние регистрации</h3>
-          {recentRegistrations.length ? (
+          <h3 className="text-base font-semibold">Мои регистрации</h3>
+          {myRegistrations.length ? (
             <ul className="mt-3 space-y-2 text-sm text-[#5D4128]">
-              {recentRegistrations.map((registration) => (
+              {myRegistrations.map((registration) => (
                 <li
                   key={registration.id}
                   className="rounded-xl bg-[#F5F5DC] px-3 py-2"
                 >
-                  <p className="font-medium">{registration.participantName}</p>
-                  <p className="text-[#816040]">
-                    {registration.participantEmail}
+                  <p className="font-medium">
+                    {conferenceStore.getConferenceById(
+                      registration.conferenceId,
+                    )?.name ?? "Конференция"}
                   </p>
                   <p className="text-xs text-[#9C7A56]">
                     {formatDate(registration.createdAt)}
@@ -399,24 +424,34 @@ const ParticipantView = observer(() => {
         </div>
 
         <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
-          <h3 className="text-base font-semibold">Последние статьи</h3>
-          {recentArticles.length ? (
+          <h3 className="text-base font-semibold">Мои статьи</h3>
+          {myArticles.length ? (
             <ul className="mt-3 space-y-2 text-sm text-[#5D4128]">
-              {recentArticles.map((article) => (
+              {myArticles.map((article) => (
                 <li
                   key={article.id}
                   className="rounded-xl bg-[#F5F5DC] px-3 py-2"
                 >
                   <p className="font-medium">{article.title}</p>
-                  <p className="text-[#816040]">
-                    {article.authorName} · {article.sectionName}
-                  </p>
-                  <Link
-                    href={article.fileDownloadUrl}
-                    className="text-xs text-[#734222] underline"
-                  >
-                    {article.fileName}
-                  </Link>
+                  <p className="text-[#816040]">{article.sectionName}</p>
+                  <div className="mt-1 flex items-center gap-3">
+                    <Link
+                      href={article.fileDownloadUrl}
+                      className="text-xs text-[#734222] underline"
+                    >
+                      {article.fileName}
+                    </Link>
+                    <button
+                      type="button"
+                      className="text-xs text-red-700 underline disabled:opacity-50"
+                      disabled={deletingArticleId === article.id}
+                      onClick={() => void handleDeleteArticle(article.id)}
+                    >
+                      {deletingArticleId === article.id
+                        ? "Удаление..."
+                        : "Удалить"}
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>

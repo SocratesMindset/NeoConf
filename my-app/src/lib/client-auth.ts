@@ -32,7 +32,5 @@ export function userHasRole(
     return false;
   }
 
-  // Superadmin can act as any role in the UI too, mirroring the backend
-  // bypass in requireUser().
   return user.roles.includes(role) || user.roles.includes("superadmin");
 }

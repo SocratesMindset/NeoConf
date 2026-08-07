@@ -8,8 +8,6 @@ type Bucket = {
 
 const buckets = new Map<string, Bucket>();
 
-// Single-process, in-memory limiter. Good enough for a single `next start`
-// instance behind nginx; won't share state across multiple app instances.
 function hit(key: string, limit: number, windowMs: number) {
   const now = Date.now();
 

@@ -114,8 +114,6 @@ export async function requireUser(
 
   const userRoles = resolveDbRoles(user);
 
-  // Superadmin can act as any role — it's the only role management can grant
-  // itself full access to without being explicitly listed everywhere.
   const isSuperAdmin = userRoles.includes("SUPERADMIN");
 
   if (

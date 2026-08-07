@@ -29,6 +29,125 @@ function extractErrorMessage(error: unknown, fallback: string) {
     : fallback;
 }
 
+function ArticlesManager() {
+  const { conferenceStore } = useStore();
+  const [selectedConferenceId, setSelectedConferenceId] = useState("");
+  const [deletingArticleId, setDeletingArticleId] = useState<string | null>(
+    null,
+  );
+  const [notice, setNotice] = useState<Notice>(null);
+
+  useEffect(() => {
+    if (!selectedConferenceId && conferenceStore.conferences[0]?.id) {
+      setSelectedConferenceId(conferenceStore.conferences[0].id);
+    }
+  }, [conferenceStore.conferences, selectedConferenceId]);
+
+  const articlesForConference = conferenceStore.articles.filter(
+    (article) => article.conferenceId === selectedConferenceId,
+  );
+
+  async function handleDelete(articleId: string) {
+    setDeletingArticleId(articleId);
+    setNotice(null);
+    try {
+      await conferenceStore.deleteArticle(articleId);
+      setNotice({ type: "success", text: "Статья удалена." });
+    } catch (error) {
+      setNotice({
+        type: "error",
+        text: extractErrorMessage(error, "Не удалось удалить статью."),
+      });
+    } finally {
+      setDeletingArticleId(null);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">Статьи конференции</h2>
+        {selectedConferenceId ? (
+          <a
+            href={`/api/articles/download-zip?conferenceId=${encodeURIComponent(selectedConferenceId)}`}
+            className="rounded-full bg-[#734222] px-4 py-1.5 text-xs font-medium text-white transition hover:bg-[#8A4F29]"
+          >
+            Скачать все статьи (zip)
+          </a>
+        ) : null}
+      </div>
+
+      <label className="mt-4 block space-y-1">
+        <span className="text-sm text-[#6A4A2D]">Конференция</span>
+        <select
+          className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
+          value={selectedConferenceId}
+          onChange={(event) => setSelectedConferenceId(event.target.value)}
+        >
+          <option value="">Выберите конференцию</option>
+          {conferenceStore.conferences.map((conference) => (
+            <option key={conference.id} value={conference.id}>
+              {conference.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {notice ? (
+        <p
+          className={
+            notice.type === "success"
+              ? "mt-3 text-sm text-emerald-700"
+              : "mt-3 text-sm text-red-700"
+          }
+        >
+          {notice.text}
+        </p>
+      ) : null}
+
+      {articlesForConference.length ? (
+        <ul className="mt-4 space-y-2 text-sm">
+          {articlesForConference.map((article) => (
+            <li
+              key={article.id}
+              className="rounded-xl bg-[#F5F5DC] px-3 py-2"
+            >
+              <p className="font-medium">{article.title}</p>
+              <p className="text-[#816040]">
+                {article.authorName} · {article.sectionName}
+              </p>
+              <div className="mt-1 flex items-center gap-3">
+                <Link
+                  href={article.fileDownloadUrl}
+                  className="text-xs text-[#734222] underline"
+                >
+                  {article.fileName}
+                </Link>
+                <button
+                  type="button"
+                  className="text-xs text-red-700 underline disabled:opacity-50"
+                  disabled={deletingArticleId === article.id}
+                  onClick={() => void handleDelete(article.id)}
+                >
+                  {deletingArticleId === article.id
+                    ? "Удаление..."
+                    : "Удалить"}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-4 text-sm text-[#816040]">
+          {selectedConferenceId
+            ? "На эту конференцию статей пока нет."
+            : "Конференций пока нет."}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function UserRolesEditor() {
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [draftRoles, setDraftRoles] = useState<Record<string, AppRole[]>>({});
@@ -175,24 +294,61 @@ const AdminView = observer(() => {
     city: "",
     startDate: "",
   });
+  const [createSectionForm, setCreateSectionForm] = useState({
+    conferenceId: "",
+    name: "",
+  });
   const [sectionRepForm, setSectionRepForm] = useState({
     conferenceId: "",
     sectionName: "",
     representativeUserId: "",
   });
   const [conferenceNotice, setConferenceNotice] = useState<Notice>(null);
+  const [sectionNotice, setSectionNotice] = useState<Notice>(null);
   const [representativeNotice, setRepresentativeNotice] =
     useState<Notice>(null);
+  const [removingRepresentativeId, setRemovingRepresentativeId] = useState<
+    string | null
+  >(null);
 
-  const eligibleSectionChairs = useMemo(() => {
+  const [eligibleSectionChairs, setEligibleSectionChairs] = useState<
+    AuthUser[]
+  >([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    apiRequest<AuthUser[]>("/api/users?role=section-chair")
+      .then((data) => {
+        if (!cancelled) setEligibleSectionChairs(data);
+      })
+      .catch(() => {
+        if (!cancelled) setEligibleSectionChairs([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const availableSections = useMemo(() => {
     if (!sectionRepForm.conferenceId) {
       return [];
     }
 
-    return conferenceStore.getRegistrationsForConference(
+    return conferenceStore.getSectionsForConference(
       sectionRepForm.conferenceId,
     );
   }, [conferenceStore, sectionRepForm.conferenceId]);
+
+  useEffect(() => {
+    if (!createSectionForm.conferenceId && conferenceStore.conferences[0]?.id) {
+      setCreateSectionForm((prev) => ({
+        ...prev,
+        conferenceId: conferenceStore.conferences[0]?.id ?? "",
+      }));
+    }
+  }, [conferenceStore.conferences, createSectionForm.conferenceId]);
 
   useEffect(() => {
     if (!sectionRepForm.conferenceId && conferenceStore.conferences[0]?.id) {
@@ -204,15 +360,23 @@ const AdminView = observer(() => {
   }, [conferenceStore.conferences, sectionRepForm.conferenceId]);
 
   useEffect(() => {
+    if (!availableSections.includes(sectionRepForm.sectionName)) {
+      setSectionRepForm((prev) => ({
+        ...prev,
+        sectionName: availableSections[0] ?? "",
+      }));
+    }
+  }, [availableSections, sectionRepForm.sectionName]);
+
+  useEffect(() => {
     const isSelectedUserAvailable = eligibleSectionChairs.some(
-      (registration) =>
-        registration.userId === sectionRepForm.representativeUserId,
+      (candidate) => candidate.id === sectionRepForm.representativeUserId,
     );
 
     if (eligibleSectionChairs.length && !isSelectedUserAvailable) {
       setSectionRepForm((prev) => ({
         ...prev,
-        representativeUserId: eligibleSectionChairs[0]?.userId ?? "",
+        representativeUserId: eligibleSectionChairs[0]?.id ?? "",
       }));
     } else if (
       !eligibleSectionChairs.length &&
@@ -245,6 +409,20 @@ const AdminView = observer(() => {
     }
   }
 
+  async function handleCreateSection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      await conferenceStore.createSection(createSectionForm);
+      setSectionNotice({ type: "success", text: "Секция создана." });
+      setCreateSectionForm((prev) => ({ ...prev, name: "" }));
+    } catch (error) {
+      setSectionNotice({
+        type: "error",
+        text: extractErrorMessage(error, "Не удалось создать секцию."),
+      });
+    }
+  }
+
   async function handleAssignRepresentative(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
@@ -256,7 +434,7 @@ const AdminView = observer(() => {
       setSectionRepForm((prev) => ({
         ...prev,
         sectionName: "",
-        representativeUserId: eligibleSectionChairs[0]?.userId ?? "",
+        representativeUserId: eligibleSectionChairs[0]?.id ?? "",
       }));
     } catch (error) {
       setRepresentativeNotice({
@@ -269,6 +447,22 @@ const AdminView = observer(() => {
             ? error.message
             : "Не удалось назначить председателя секции.",
       });
+    }
+  }
+
+  async function handleRemoveRepresentative(representativeId: string) {
+    setRemovingRepresentativeId(representativeId);
+    setRepresentativeNotice(null);
+    try {
+      await conferenceStore.removeSectionRepresentative(representativeId);
+      setRepresentativeNotice({ type: "success", text: "Председатель снят." });
+    } catch (error) {
+      setRepresentativeNotice({
+        type: "error",
+        text: extractErrorMessage(error, "Не удалось снять председателя."),
+      });
+    } finally {
+      setRemovingRepresentativeId(null);
     }
   }
 
@@ -311,7 +505,7 @@ const AdminView = observer(() => {
         </p>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-3">
         <form
           className="space-y-4 rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm"
           onSubmit={(event) => void handleCreateConference(event)}
@@ -384,6 +578,68 @@ const AdminView = observer(() => {
 
         <form
           className="space-y-4 rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm"
+          onSubmit={(event) => void handleCreateSection(event)}
+        >
+          <h2 className="text-lg font-semibold">Создать секцию</h2>
+
+          <label className="block space-y-1">
+            <span className="text-sm text-[#6A4A2D]">Конференция</span>
+            <select
+              className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
+              value={createSectionForm.conferenceId}
+              onChange={(event) =>
+                setCreateSectionForm((prev) => ({
+                  ...prev,
+                  conferenceId: event.target.value,
+                }))
+              }
+            >
+              <option value="">Выберите конференцию</option>
+              {conferenceStore.conferences.map((conference) => (
+                <option key={conference.id} value={conference.id}>
+                  {conference.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block space-y-1">
+            <span className="text-sm text-[#6A4A2D]">Название секции</span>
+            <input
+              className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
+              value={createSectionForm.name}
+              onChange={(event) =>
+                setCreateSectionForm((prev) => ({
+                  ...prev,
+                  name: event.target.value,
+                }))
+              }
+              placeholder="Data Science"
+            />
+          </label>
+
+          {sectionNotice ? (
+            <p
+              className={
+                sectionNotice.type === "success"
+                  ? "text-sm text-emerald-700"
+                  : "text-sm text-red-700"
+              }
+            >
+              {sectionNotice.text}
+            </p>
+          ) : null}
+
+          <button
+            className="rounded-full bg-[#734222] px-5 py-2 text-sm font-medium text-white transition hover:bg-[#8A4F29]"
+            type="submit"
+          >
+            Создать секцию
+          </button>
+        </form>
+
+        <form
+          className="space-y-4 rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm"
           onSubmit={(event) => void handleAssignRepresentative(event)}
         >
           <h2 className="text-lg font-semibold">
@@ -413,7 +669,7 @@ const AdminView = observer(() => {
 
           <label className="block space-y-1">
             <span className="text-sm text-[#6A4A2D]">Секция</span>
-            <input
+            <select
               className="w-full rounded-xl border border-[#C7B288] px-3 py-2 text-sm outline-none focus:border-[#8A5A2A]"
               value={sectionRepForm.sectionName}
               onChange={(event) =>
@@ -422,9 +678,22 @@ const AdminView = observer(() => {
                   sectionName: event.target.value,
                 }))
               }
-              placeholder="Data Science"
-            />
+            >
+              <option value="">Выберите секцию</option>
+              {availableSections.map((sectionName) => (
+                <option key={sectionName} value={sectionName}>
+                  {sectionName}
+                </option>
+              ))}
+            </select>
           </label>
+
+          {sectionRepForm.conferenceId && !availableSections.length ? (
+            <p className="text-sm text-[#816040]">
+              На выбранной конференции пока нет ни одной секции — создайте её
+              слева.
+            </p>
+          ) : null}
 
           <label className="block space-y-1">
             <span className="text-sm text-[#6A4A2D]">Пользователь</span>
@@ -439,19 +708,17 @@ const AdminView = observer(() => {
               }
             >
               <option value="">Выберите пользователя</option>
-              {eligibleSectionChairs.map((registration) => (
-                <option key={registration.userId} value={registration.userId}>
-                  {registration.participantName} ·{" "}
-                  {registration.participantEmail}
+              {eligibleSectionChairs.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.fullName} · {candidate.email}
                 </option>
               ))}
             </select>
           </label>
 
-          {sectionRepForm.conferenceId && !eligibleSectionChairs.length ? (
+          {!eligibleSectionChairs.length ? (
             <p className="text-sm text-[#816040]">
-              На выбранной конференции нет зарегистрированных пользователей с
-              ролью председателя секции.
+              Пока нет ни одного пользователя с ролью председателя секции.
             </p>
           ) : null}
 
@@ -476,7 +743,7 @@ const AdminView = observer(() => {
         </form>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
           <h3 className="text-base font-semibold">Конференции</h3>
           {conferenceStore.conferences.length ? (
@@ -499,7 +766,49 @@ const AdminView = observer(() => {
         </div>
 
         <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
+          <h3 className="text-base font-semibold">Секции</h3>
+          {conferenceStore.sections.length ? (
+            <ul className="mt-3 space-y-2 text-sm">
+              {conferenceStore.sections.map((section) => {
+                const conference = conferenceStore.getConferenceById(
+                  section.conferenceId,
+                );
+                return (
+                  <li
+                    key={section.id}
+                    className="rounded-xl bg-[#F5F5DC] px-3 py-2"
+                  >
+                    <p className="font-medium">{section.name}</p>
+                    <p className="text-xs text-[#9C7A56]">
+                      {conference?.name ?? "Конференция не найдена"}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-[#816040]">Секций пока нет.</p>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-[#D8C8A8] bg-[#FDF9E8] p-6 shadow-sm">
           <h3 className="text-base font-semibold">Председатели секций</h3>
+          <p className="mt-1 text-xs text-[#816040]">
+            У одной секции может быть несколько председателей.
+          </p>
+
+          {representativeNotice ? (
+            <p
+              className={
+                representativeNotice.type === "success"
+                  ? "mt-2 text-sm text-emerald-700"
+                  : "mt-2 text-sm text-red-700"
+              }
+            >
+              {representativeNotice.text}
+            </p>
+          ) : null}
+
           {conferenceStore.sectionRepresentatives.length ? (
             <ul className="mt-3 space-y-2 text-sm">
               {conferenceStore.sectionRepresentatives.map((representative) => {
@@ -516,9 +825,23 @@ const AdminView = observer(() => {
                       {representative.representativeName} ·{" "}
                       {representative.representativeEmail}
                     </p>
-                    <p className="text-xs text-[#9C7A56]">
-                      {conference?.name ?? "Конференция не найдена"}
-                    </p>
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <p className="text-xs text-[#9C7A56]">
+                        {conference?.name ?? "Конференция не найдена"}
+                      </p>
+                      <button
+                        type="button"
+                        className="shrink-0 text-xs text-red-700 underline disabled:opacity-50"
+                        disabled={removingRepresentativeId === representative.id}
+                        onClick={() =>
+                          void handleRemoveRepresentative(representative.id)
+                        }
+                      >
+                        {removingRepresentativeId === representative.id
+                          ? "Снятие..."
+                          : "Снять"}
+                      </button>
+                    </div>
                   </li>
                 );
               })}
@@ -528,6 +851,8 @@ const AdminView = observer(() => {
           )}
         </div>
       </div>
+
+      <ArticlesManager />
 
       {userHasRole(authStore.user, "superadmin") ? <UserRolesEditor /> : null}
     </section>

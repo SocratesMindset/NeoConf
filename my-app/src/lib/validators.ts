@@ -30,6 +30,11 @@ export const createConferenceSchema = z.object({
   startDate: z.string().date("Укажите корректную дату начала."),
 });
 
+export const createSectionSchema = z.object({
+  conferenceId: z.string().trim().min(1, "Выберите конференцию."),
+  name: z.string().trim().min(1, "Название секции обязательно."),
+});
+
 export const sectionRepresentativeSchema = z.object({
   conferenceId: z.string().trim().min(1, "Выберите конференцию."),
   sectionName: z.string().trim().min(1, "Название секции обязательно."),

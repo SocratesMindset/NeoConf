@@ -8,9 +8,6 @@ export const APP_ROLES = [
 
 export type AppRole = (typeof APP_ROLES)[number];
 
-// Roles a user is allowed to pick for themselves at /api/auth/register.
-// "superadmin" is intentionally excluded — it can only be granted by an
-// existing superadmin via /api/admin/users/[userId]/roles.
 export const SELF_REGISTERABLE_ROLES = APP_ROLES.filter(
   (role) => role !== "superadmin",
 );
@@ -86,6 +83,13 @@ export interface SectionRepresentative {
   createdAt: string;
 }
 
+export interface Section {
+  id: string;
+  conferenceId: string;
+  name: string;
+  createdAt: string;
+}
+
 export interface AppState {
   conferences: Conference[];
   participantRegistrations: ParticipantRegistration[];
@@ -93,4 +97,5 @@ export interface AppState {
   reviewerAssignments: ReviewerAssignment[];
   reviews: Review[];
   sectionRepresentatives: SectionRepresentative[];
+  sections: Section[];
 }

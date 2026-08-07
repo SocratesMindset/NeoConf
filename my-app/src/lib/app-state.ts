@@ -6,6 +6,7 @@ import {
   serializeParticipantRegistration,
   serializeReview,
   serializeReviewerAssignment,
+  serializeSection,
   serializeSectionRepresentative,
 } from "@/lib/serializers";
 
@@ -17,6 +18,7 @@ export async function getAppState(): Promise<AppState> {
     reviewerAssignments,
     reviews,
     sectionRepresentatives,
+    sections,
   ] = await prisma.$transaction([
     prisma.conference.findMany({
       orderBy: [{ startDate: "asc" }, { createdAt: "desc" }],
@@ -73,6 +75,11 @@ export async function getAppState(): Promise<AppState> {
         createdAt: "desc",
       },
     }),
+    prisma.section.findMany({
+      orderBy: {
+        createdAt: "asc",
+      },
+    }),
   ]);
 
   return {
@@ -86,5 +93,37 @@ export async function getAppState(): Promise<AppState> {
     sectionRepresentatives: sectionRepresentatives.map(
       serializeSectionRepresentative,
     ),
+    sections: sections.map(serializeSection),
+  };
+}
+
+export function toPublicAppState(state: AppState): AppState {
+  return {
+    conferences: state.conferences,
+    participantRegistrations: state.participantRegistrations.map((registration) => ({
+      ...registration,
+      userId: "",
+      userRoles: [],
+      participantName: "",
+      participantEmail: "",
+    })),
+    articles: state.articles.map((article) => ({
+      ...article,
+      title: "",
+      abstract: "",
+      authorName: "",
+      authorEmail: "",
+      fileName: "",
+      fileDownloadUrl: "",
+    })),
+    reviewerAssignments: [],
+    reviews: state.reviews.map((review) => ({
+      ...review,
+      reviewerName: "",
+      reviewerEmail: "",
+      comment: "",
+    })),
+    sectionRepresentatives: [],
+    sections: state.sections,
   };
 }
